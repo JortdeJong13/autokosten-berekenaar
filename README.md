@@ -39,6 +39,15 @@ Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilo
 
    Herkent de extensie een optie niet, dan blijft het vakje **uit**. Een onterecht aangevinkte optie verhoogt de waarde van de auto en daarmee het berekende bedrag, dus niets doen is de veiligere fout.
 
+   De concepten zijn gebaseerd op een inventarisatie van ANWB's optielijsten via hun eigen `configurations`-API. Daaruit blijkt dat ANWB circa 33 opties prijst en dat de lijst per model verschilt. Ongeveer tien daarvan hebben een tegenhanger in de advertentiegegevens; de rest (alarm, getint glas, skiluik, lendesteun, armsteun, boordcomputer, koplampsproeiers, spiegels, xenon, verwarmde voorruit, radio/cd) wordt bewust met rust gelaten.
+
+   Twee dingen om te weten:
+
+   - **"STOELEN VERWARMED"** staat zo in ANWB's eigen data (een typefout voor *verwarmd*). De koppeling zoekt daarom op de woorden *stoel* én *verwarm*, in plaats van op die ene spelling. Dat sluit tegelijk **VERWARMDE VOORRUIT** (voorruit, geen stoel) en **ZIJRUITEN ELEKTRISCH** (ramen, geen stoel) uit — opties die anders onterecht zouden worden aangevinkt.
+   - **"AUTOMATIC CLIMATE CONTROL"** wordt alleen aangevinkt bij *automatische* klimaatregeling. Een auto met alleen "Airconditioning" krijgt het vakje niet.
+
+   De koppeling van het **schuifdak** is de minst zekere: AutoScout24 zegt alleen "Open dak", terwijl ANWB onderscheid maakt tussen een gewoon schuifdak en een elektrisch bediend exemplaar, met verschillende prijzen.
+
 <p align="center">
   <img src="docs/popup.png" alt="Het extensieformulier in de Safari-werkbalk" width="300">
 </p>
@@ -114,7 +123,7 @@ Daarna moet Safari volledig afsluiten (**⌘Q** — het sluiten van het venster 
 3. Controleer de uitgelezen gegevens en pas zo nodig de uitgangspunten aan.
 4. Klik op **Bereken op ANWB.nl**. Er opent een nieuw tabblad waarin de rekentool automatisch wordt doorlopen.
 
-Staat het kenteken niet in de advertentie? Dan laat het formulier dat weten en kun je het zelf invullen — het kenteken is het enige dat ANWB nodig heeft om de auto op te zoeken.
+Staat het kenteken niet in de advertentie? Dan gaat het formulier gewoon door en zoekt ANWB de auto op **merk en model**. Het kentekenveld blijft staan (met de aanduiding *optioneel*) voor het geval je het alsnog wilt intypen, maar je hoeft er niets mee.
 
 ## Hoe het werkt
 

@@ -427,8 +427,10 @@
 
       // A missing kenteken is the one thing the user must supply themselves.
       if (!details.licensePlate) {
-        form.showFeedback('Kenteken niet in de advertentie gevonden, vul het hier in.', 'info');
-        setTimeout(() => form.focusPlate(), 60);
+        // Nothing to say: the make/model fallback covers this, and a notice
+        // here would just be noise. The field stays available if the user
+        // knows the plate and would rather type it.
+        form.clearFeedback();
       } else {
         form.clearFeedback();
       }

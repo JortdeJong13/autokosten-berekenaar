@@ -217,7 +217,6 @@
             <input type="text" id="cce-plate" class="cce-plate-input" data-role="plate"
                    placeholder="XX-XX-XX" maxlength="9" autocomplete="off" spellcheck="false" />
           </div>
-          <span class="cce-hint" data-role="plate-hint" hidden></span>
         </div>
 
         <div class="cce-row">
@@ -313,24 +312,17 @@
     }
 
     /**
-     * When we know the car's make and model, ANWB can be driven without a plate,
-     * so say so instead of leaving the field looking mandatory.
+     * With the car's make and model known, ANWB can be driven without a plate.
+     * Mark the field optional so it does not read as a required field the user
+     * has to go and find — the fallback handles it.
      */
     function updatePlateHint() {
-      const hint = mount.querySelector('[data-role="plate-hint"]');
       const label = mount.querySelector('[data-role="plate-label"]');
-      if (!hint) return;
+      if (label) label.textContent = hasVehicleDetails() ? 'Kenteken (optioneel)' : 'Kenteken';
 
-      if (hasVehicleDetails()) {
-        const { brand, model } = vehicleDetails;
-        label.textContent = 'Kenteken (optioneel)';
-        hint.textContent = `Geen kenteken nodig: ANWB zoekt op ${brand} ${model}.`;
-        hint.hidden = false;
-      } else {
-        label.textContent = 'Kenteken';
-        hint.hidden = true;
-        hint.textContent = '';
-      }
+      // A "fill in a kenteken" complaint is obsolete once we know the car, so
+      // drop it rather than leaving a stale warning on screen.
+      if (hasVehicleDetails()) clearFeedback();
     }
 
     // Persist settings as soon as they change, so the next calculation uses them.

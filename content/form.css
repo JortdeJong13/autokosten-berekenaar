@@ -246,16 +246,3 @@
   color: #0369a1;
   border: 1px solid #bae6fd;
 }
-
-/* Hint under the kenteken field, shown when a plate is optional. */
-.cce-hint {
-  display: block;
-  margin-top: 4px;
-  font-size: 10px;
-  line-height: 1.35;
-  color: #0369a1;
-}
-
-.cce-hint[hidden] {
-  display: none;
-}

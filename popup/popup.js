@@ -29,14 +29,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       vehicle: details.vehicle,
     });
 
+    // Only confirm when there is something to confirm; a missing plate is
+    // handled by the make/model fallback, so it needs no notice.
     if (details.licensePlate) {
       form.showFeedback('Gegevens overgenomen van de pagina.', 'info');
-    } else {
-      form.showFeedback('Geen kenteken in de advertentie. De auto wordt op merk en model opgezocht.', 'info');
     }
   }
-
-  if (!details || !details.licensePlate) form.focusPlate();
 });
 
 /**
