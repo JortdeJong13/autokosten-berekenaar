@@ -8,9 +8,10 @@
 #
 #   ./scripts/make-safari-app.sh
 #
-# Output goes to a SIBLING of this repo (../autokosten-berekenaar-safari), not
-# inside it: the converter scans the extension folder for resources, and
-# writing its output there risks it picking up its own generated files.
+# Apple's converter bundles *every* file it finds in the folder it is pointed
+# at. Pointing it at the repo root would ship node_modules, test/, docs/ and the
+# npm manifests inside the extension, so this stages just the files the
+# extension actually needs into a temp directory first.
 
 set -euo pipefail
 
@@ -18,6 +19,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$(cd "${REPO_ROOT}/.." && pwd)/autokosten-berekenaar-safari"
 APP_NAME="Autokosten Berekenaar"
 BUNDLE_ID="nl.jortdejong.autokosten-berekenaar"
+
+# Everything the extension needs at runtime. Keep in sync with manifest.json.
+EXTENSION_FILES=(
+  manifest.json
+  background.js
+  content
+  utils
+  popup
+  icons
+)
 
 # --- Find the converter (Apple renamed it in newer Xcode) -------------------
 
@@ -73,22 +84,41 @@ MSG
   exit 1
 fi
 
+# --- Stage the extension ----------------------------------------------------
+
+STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/autokosten-ext.XXXXXX")"
+# Clean up the staging directory however we exit.
+trap 'rm -rf "${STAGE_DIR}"' EXIT
+
+for item in "${EXTENSION_FILES[@]}"; do
+  if [[ ! -e "${REPO_ROOT}/${item}" ]]; then
+    echo "error: ${item} is missing from the repo but listed in EXTENSION_FILES" >&2
+    exit 1
+  fi
+  cp -R "${REPO_ROOT}/${item}" "${STAGE_DIR}/"
+done
+
+echo "Staged extension files:"
+( cd "${STAGE_DIR}" && find . -maxdepth 1 -mindepth 1 | sed 's|^\./|  |' | sort )
+echo "  (total: $(du -sh "${STAGE_DIR}" | cut -f1))"
+echo
+
 # --- Convert ----------------------------------------------------------------
 
-echo "Converting the extension into an Xcode project…"
+echo "Converting into an Xcode project…"
 echo "  converter: ${CONVERTER}"
-echo "  source:    ${REPO_ROOT}"
 echo "  output:    ${OUT_DIR}"
 echo
 
-# Extension files are referenced, not copied (the default), so editing the JS
-# here and rebuilding in Xcode picks the changes up.
-xcrun "${CONVERTER}" "${REPO_ROOT}" \
+# --copy-resources copies the staged files into the project, rather than
+# referencing the temp directory that is about to be deleted.
+xcrun "${CONVERTER}" "${STAGE_DIR}" \
   --project-location "${OUT_DIR}" \
   --app-name "${APP_NAME}" \
   --bundle-identifier "${BUNDLE_ID}" \
   --swift \
   --macos-only \
+  --copy-resources \
   --no-open \
   --no-prompt
 
@@ -110,8 +140,9 @@ Done. Next:
 The extension now survives quitting Safari, and you can turn
 "Allow unsigned extensions" back off.
 
-Note: the project references this repo's files rather than copying them, so if
-you move or rename ${REPO_ROOT}, delete the project and re-run this script.
+Note: the extension files were COPIED into the project. After changing the
+extension's JS/CSS/manifest, re-run this script (deleting ${OUT_DIR} first)
+or edit the copies inside the Xcode project.
 
 To share the app with others you need a paid Apple Developer account
 (\$99/year) to sign and notarise it.
