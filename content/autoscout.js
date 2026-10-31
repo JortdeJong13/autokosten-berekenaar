@@ -91,6 +91,99 @@
   }
 
   /**
+   * Vehicle details used by the make/model fallback, when there is no plate.
+   *
+   * Source: the listing's JSON-LD `Car` block, which is structured rather than
+   * scraped from markup, so it is far less brittle. Fields it provides:
+   * manufacturer, model, productionDate, numberOfDoors, vehicleTransmission.
+   * Fuel type is NOT in the JSON-LD, so it comes from __NEXT_DATA__'s
+   * `fuelCategory.formatted`, which is already a readable label.
+   */
+  function extractVehicleDetails() {
+    const vehicle = {
+      brand: null, model: null, productionDate: null,
+      doors: null, fuel: null, transmission: null,
+    };
+
+    const readJsonLd = () => {
+      for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+        let parsed;
+        try {
+          parsed = JSON.parse(script.textContent);
+        } catch {
+          continue;
+        }
+
+        // The Car sits under an Offer's itemOffered, but walk anything.
+        const stack = [parsed];
+        while (stack.length) {
+          const node = stack.pop();
+          if (!node || typeof node !== 'object') continue;
+
+          if (node['@type'] === 'Car') {
+            vehicle.brand ||= node.manufacturer || null;
+            vehicle.model ||= node.model || null;
+            vehicle.productionDate ||= node.productionDate || null;
+            vehicle.doors ||= node.numberOfDoors || null;
+            vehicle.transmission ||= node.vehicleTransmission || null;
+            return true;
+          }
+
+          for (const value of Object.values(node)) {
+            if (value && typeof value === 'object') stack.push(value);
+          }
+        }
+      }
+      return false;
+    };
+
+    try {
+      readJsonLd();
+    } catch (err) {
+      console.warn('[AutokostenBerekenaar] JSON-LD lezen mislukt:', err);
+    }
+
+    // Fuel type lives only in __NEXT_DATA__.
+    if (!vehicle.fuel) {
+      const nextData = document.getElementById('__NEXT_DATA__');
+      if (nextData) {
+        try {
+          const parsed = JSON.parse(nextData.textContent);
+          const find = (node) => {
+            if (!node || typeof node !== 'object') return null;
+            if (vehicle.fuel) return null;
+
+            const category = node.fuelCategory;
+            if (category && typeof category === 'object' && category.formatted) {
+              return category.formatted;
+            }
+
+            for (const value of Object.values(node)) {
+              const hit = find(value);
+              if (hit) return hit;
+            }
+            return null;
+          };
+          vehicle.fuel = find(parsed);
+        } catch (err) {
+          console.warn('[AutokostenBerekenaar] __NEXT_DATA__ lezen mislukt:', err);
+        }
+      }
+    }
+
+    // Fall back to a labelled DOM row for fuel, if the data blobs failed.
+    if (!vehicle.fuel) {
+      for (const el of document.querySelectorAll('dt, th, span')) {
+        if (!/^brandstof$/i.test(el.textContent.trim())) continue;
+        const value = el.nextElementSibling?.textContent?.trim();
+        if (value && value.length < 40) { vehicle.fuel = value; break; }
+      }
+    }
+
+    return vehicle;
+  }
+
+  /**
    * Fast, on-demand extraction from DOM (< 10ms execution time)
    */
   function extractCarDetails() {
@@ -196,7 +289,10 @@
     }
 
     console.log('[AutokostenBerekenaar] Extracted details on-demand:', { title, price, mileage, licensePlate });
-    return { title, price, mileage, licensePlate };
+    const vehicle = extractVehicleDetails();
+
+    console.log('[AutokostenBerekenaar] Uitgelezen:', { title, price, mileage, licensePlate, vehicle });
+    return { title, price, mileage, licensePlate, vehicle };
   }
 
   // Listen for message from popup

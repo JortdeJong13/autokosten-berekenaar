@@ -20,6 +20,12 @@ Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilo
 
 4. **Doorloopt de ANWB-rekentool.** De extensie vult het kenteken in, kiest de standaarduitvoering, zet de aanschafdatum op de huidige maand, en vult kilometerstand, aanschafprijs en jouw uitgangspunten in. Daarna word je doorgestuurd naar het resultaat met de maandelijkse kosten.
 
+5. **Terugvaloptie op merk en model.** Staat er geen kenteken in de advertentie, dan schakelt de extensie over op ANWB's tabblad "Zoek op merk en model" en beschrijft de auto aan de hand van de advertentiegegevens: merk, model, bouwjaar, bouwmaand en — als ANWB daarom vraagt — brandstof.
+
+   De gegevens komen uit het JSON-LD `Car`-blok van de advertentie, dat structuur biedt in plaats van opmaak die kan veranderen. Alleen de brandstofsoort staat daar niet in; die komt uit `__NEXT_DATA__`.
+
+   > **Let op:** AutoScout24 en ANWB noemen modellen niet hetzelfde. AutoScout24 zegt "GLC 300" waar ANWB "Glc-Klasse" heeft, en "318I" waar ANWB alleen "3-Serie" kent. Een verkeerde koppeling levert een plausibel maar onjuist bedrag op, dus bij een onzekere match meldt de statusbalk welke keuze is gemaakt, zodat je het kunt controleren. Lukt koppelen helemaal niet, dan stopt de automatisering met een duidelijke melding in plaats van te gokken.
+
 <p align="center">
   <img src="docs/popup.png" alt="Het extensieformulier in de Safari-werkbalk" width="300">
 </p>
@@ -106,6 +112,7 @@ utils/
   kenteken.js          RDW-sidecode validatie, opmaak en extractie
   dom-utils.js         React-bewuste formulierhulpjes voor de ANWB-tool
   calculator-form.js   Het gedeelde formulier (popup + zwevende knop)
+  vehicle.js           Merk/model-koppeling voor de terugvaloptie
 content/
   autoscout.js         Leest de advertentiepagina uit
   form.css             Styling van het gedeelde formulier

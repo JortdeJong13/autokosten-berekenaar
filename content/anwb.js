@@ -27,6 +27,7 @@
 
   const DOM = window.DOMUtils;
   const Kenteken = window.KentekenUtils;
+  const VehicleUtils = window.VehicleUtils;
   const { sleep, waitFor, AbortedError } = DOM;
 
   const DEFAULT_SETTINGS = {
@@ -44,6 +45,8 @@
 
   let pendingData = null;
   let settings = { ...DEFAULT_SETTINGS };
+  // True when the listing had no plate and we are describing the car instead.
+  let useMerkModel = false;
   let running = false;
   let stopped = false;
   let banner = null;
@@ -57,6 +60,9 @@
 
   const screen = {
     isKenteken: () => hasField('input[name="licensePlate"]'),
+    // The make/model branch, used only when a listing has no licence plate.
+    // It grows in stages: Merk -> Model -> Bouwjaar -> Bouwmaand -> [extra].
+    isMerkModel: () => hasField('select[name="brand"]') || hasField('select[name="model"]'),
     isUitvoering: () => hasField('input[name="selectedConfigurationId"]'),
     isAanschaf: () =>
       hasField('input[name="mileageAtPurchase"]') ||
@@ -208,6 +214,172 @@
 
     await advance(/volgende stap/i, () => !screen.isKenteken() || screen.isAanschaf(), { step: 35 });
     filled.delete('kenteken');
+  }
+
+  /**
+   * ANWB opens on its "Zoek op kenteken" tab. Without a plate we need the
+   * "Zoek op merk en model" tab instead.
+   */
+  async function switchToMerkModelTab() {
+    setStatus('Overschakelen naar zoeken op merk en model…', { step: 10 });
+
+    const switched = await waitFor(
+      () => {
+        const tab = Array.from(document.querySelectorAll('button, [role="tab"], label, a'))
+          .find((el) => /zoek op merk en model/i.test(el.textContent) && isVisible(el));
+        if (!tab) return false;
+
+        tab.click();
+        return true;
+      },
+      { timeout: 15000, guard }
+    );
+
+    if (!switched) throw new Error('Tabblad "Zoek op merk en model" niet gevonden');
+
+    // Wait for the brand dropdown to arrive.
+    await waitFor(() => {
+      const el = field('select[name="brand"]');
+      return el && el.options.length > 1;
+    }, { timeout: 20000, guard });
+  }
+
+  const isVisible = (el) => Boolean(el && el.getBoundingClientRect().width);
+
+  /**
+   * Wait for a select to be usable, set it, and confirm the value stuck.
+   *
+   * Verifying matters here: the make/model form re-renders each dropdown in
+   * response to the previous answer, so a value written while React is still
+   * re-rendering that select is silently discarded. Setting the year straight
+   * after the model did exactly that, leaving the month dropdown disabled
+   * forever. Re-setting after the re-render settles fixes it.
+   */
+  async function setSelectAndVerify(name, valueOrText, { timeout = 20000, guard: g = guard, attempts = 5 } = {}) {
+    let select = null;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      select = await waitFor(
+        () => {
+          const el = field(`select[name="${name}"]`);
+          return el && !el.disabled && el.options.length > 1 ? el : null;
+        },
+        { timeout, guard: g }
+      );
+
+      DOM.setSelectValue(select, valueOrText);
+
+      // Give React a beat, then check the selection survived the re-render.
+      await sleep(500);
+      g();
+
+      if (select.value) return select;
+    }
+
+    if (!select || !select.value) {
+      throw new Error(`Kon "${valueOrText}" niet selecteren in "${name}"`);
+    }
+    return select;
+  }
+
+  /**
+   * Fallback flow — make/model, used when the listing has no licence plate.
+   *
+   * The form is dynamic: it asks Merk, Model, Bouwjaar, Bouwmaand, and *only
+   * for some cars* Aantal deuren, Brandstofsoort and Soort transmissie. Each
+   * answer reveals the next, so this fills whatever is present and lets the
+   * runner come back around as the form grows.
+   *
+   * Model matching is imperfect (AutoScout24 says "318I" where ANWB says
+   * "3-Serie"), so a low-confidence match is surfaced to the user rather than
+   * silently trusted — a wrong model produces a plausible but wrong cost.
+   */
+  async function doMerkModel(data, filled) {
+    const vehicle = data.vehicle || {};
+    const V = VehicleUtils;
+
+    // --- Merk ---
+    if (!filled.has('merk')) {
+      setStatus('Auto zoeken op merk en model…', { step: 15 });
+
+      const brandSelect = await waitFor(
+        () => {
+          const el = field('select[name="brand"]');
+          return el && el.options.length > 1 ? el : null;
+        },
+        { timeout: 20000, guard }
+      );
+
+      const match = V.matchBrand(Array.from(brandSelect.options).filter((o) => o.value), vehicle.brand);
+      if (!match.option) {
+        throw new Error(`Merk "${vehicle.brand}" niet gevonden bij ANWB`);
+      }
+
+      await setSelectAndVerify('brand', match.option.value);
+      filled.add('merk');
+      setStatus(`Merk gekozen: ${match.option.text}`, { step: 25 });
+    }
+
+    // --- Model (populated after Merk) ---
+    if (!filled.has('model')) {
+      const modelSelect = await waitFor(
+        () => {
+          const el = field('select[name="model"]');
+          return el && el.options.length > 1 ? el : null;
+        },
+        { timeout: 20000, guard }
+      );
+
+      const options = Array.from(modelSelect.options).filter((o) => o.value);
+      const match = V.matchModel(options, vehicle.model);
+
+      if (!match.option) {
+        throw new Error(
+          `Model "${vehicle.model}" kon niet automatisch worden gekoppeld. ` +
+          'Kies het model handmatig en klik op Volgende stap.'
+        );
+      }
+
+      const lowConfidence = match.confidence < V.Confidence.HIGH;
+      await setSelectAndVerify('model', match.option.value);
+      filled.add('model');
+
+      setStatus(
+        lowConfidence
+          ? `Let op: "${vehicle.model}" is gekoppeld aan "${match.option.text}". Controleer dit.`
+          : `Model gekozen: ${match.option.text}`,
+        { step: 35 }
+      );
+    }
+
+    // --- Bouwjaar (appears after Model) ---
+    if (!filled.has('bouwjaar') && vehicle.year) {
+      await setSelectAndVerify('licensePlateYear', String(vehicle.year));
+      filled.add('bouwjaar');
+      setStatus(`Bouwjaar gekozen: ${vehicle.year}`, { step: 38 });
+    }
+
+    // --- Bouwmaand (enabled after Bouwjaar) ---
+    if (!filled.has('bouwmaand') && vehicle.month) {
+      await setSelectAndVerify('licensePlateMonth', V.monthName(vehicle.month));
+      filled.add('bouwmaand');
+      setStatus(`Bouwmaand gekozen: ${V.monthName(vehicle.month)}`, { step: 42 });
+    }
+
+    // --- Extra fields, only present for some cars ---
+    if (!filled.has('extra')) {
+      const fuelSelect = field('select[name="fuel"]');
+      if (fuelSelect && fuelSelect.options.length > 1) {
+        const fuel = V.mapFuel(vehicle.fuel);
+        // A pure-electric car has no ANWB fuel option; leaving it unset is
+        // correct, and ANWB does not require the field in that case.
+        if (fuel) await setSelectAndVerify('fuel', fuel, { timeout: 8000, attempts: 2 });
+        filled.add('extra');
+      }
+    }
+
+    await advance(/volgende stap/i, () => !screen.isMerkModel() || screen.isUitvoering() || screen.isAanschaf(), { step: 45 });
+    filled.clear();
   }
 
   /**
@@ -396,7 +568,20 @@
           continue;
         }
 
+        if (screen.isMerkModel()) {
+          await doMerkModel(pendingData, filled);
+          idlePasses = 0;
+          continue;
+        }
+
         if (screen.isKenteken()) {
+          // No plate on the listing: switch ANWB to its make/model tab first.
+          if (useMerkModel && !filled.has('tab-switched')) {
+            await switchToMerkModelTab();
+            filled.add('tab-switched');
+            idlePasses = 0;
+            continue;
+          }
           await doKenteken(pendingData, filled);
           idlePasses = 0;
           continue;
@@ -453,9 +638,22 @@
       return;
     }
 
+    // No usable plate: fall back to ANWB's make/model form, but only when the
+    // listing gave us enough to identify the car.
     if (!Kenteken?.isValid(pendingData.licensePlate)) {
-      console.warn('[AutokostenBerekenaar] Ongeldig kenteken, automatisering overgeslagen:', pendingData.licensePlate);
-      return;
+      const vehicle = VehicleUtils?.buildVehiclePayload(pendingData.vehicle || {});
+      if (!vehicle) {
+        console.warn(
+          '[AutokostenBerekenaar] Geen kenteken en te weinig voertuiggegevens, automatisering overgeslagen.'
+        );
+        return;
+      }
+      // buildVehiclePayload derives year/month from productionDate, so use its
+      // result rather than the raw extracted shape (which only has
+      // productionDate). Reading the raw shape silently left year undefined.
+      pendingData.vehicle = vehicle;
+      useMerkModel = true;
+      console.log('[AutokostenBerekenaar] Geen kenteken — merk/model-fallback met:', vehicle);
     }
 
     await waitFor(() => document.body, { timeout: 10000 }).catch(() => {});
