@@ -45,7 +45,34 @@ De extensie is niet ondertekend en staat niet in de App Store, dus je laadt hem 
 2. Selecteer de map met `manifest.json` (de hoofdmap van deze repo).
 3. Klaar — de extensie is actief.
 
-> Safari vergeet tijdelijke extensies zodra je hem afsluit. Na een herstart van Safari laad je hem opnieuw. Voor dagelijks gebruik kun je de extensie in Xcode omzetten naar een echte app; dat vraagt wel een Apple Developer-account voor distributie.
+> Safari vergeet tijdelijke extensies zodra je hem afsluit. Na een herstart van Safari laad je hem opnieuw. Voor dagelijks gebruik kun je er beter een echte app van maken — zie hieronder.
+
+### Een blijvende installatie maken
+
+Met de tijdelijke-extensie-methode hierboven moet je de extensie na elke herstart van Safari opnieuw laden. Wil je dat niet, dan kun je deze repo omzetten in een echte macOS-app die Safari definitief installeert. Dat heeft twee voordelen: de extensie blijft staan, en je kunt **"Niet-ondertekende extensies toestaan"** daarna weer uitzetten.
+
+Je hebt daar **volledige Xcode** voor nodig (niet alleen de Command Line Tools), omdat het `safari-web-extension-converter` gebruikt.
+
+1. Installeer Xcode via de App Store, en zet daarna de toolchain goed:
+
+   ```bash
+   sudo xcode-select -s /Applications/Xcode.app
+   sudo xcodebuild -runFirstLaunch
+   ```
+
+2. Genereer het Xcode-project:
+
+   ```bash
+   ./scripts/make-safari-app.sh
+   ```
+
+3. Open het gegenereerde project, kies bij **Signing & Capabilities** je team (een gratis Apple ID is genoeg voor eigen gebruik), en druk op **Run** (`⌘R`).
+
+4. Zet de extensie aan in **Safari › Instellingen › Extensies**.
+
+De map `safari/` staat in `.gitignore`, want het project bevat je persoonlijke signing-instellingen.
+
+> **Verspreiden naar anderen** is een grotere stap: dan heb je een betaald Apple Developer-account nodig ($99 per jaar) om de app te ondertekenen en te notariseren. Zonder dat kunnen anderen de app niet zonder waarschuwing installeren.
 
 ## Gebruik
 
@@ -72,6 +99,9 @@ content/
   anwb.js              Automatiseert de ANWB-rekentool
   anwb.css             Voortgangsbalk tijdens het automatiseren
 popup/                 Werkbalk-popup (rendert hetzelfde formulier)
+scripts/
+  generate-icons.js    Genereert de PNG-iconen
+  make-safari-app.sh   Zet de extensie om naar een echte macOS-app
 ```
 
 Een paar keuzes die het gedrag van de ANWB-tool verklaren, allemaal tegen de echte site geverifieerd:

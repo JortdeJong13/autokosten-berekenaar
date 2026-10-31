@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install WebKit for Playwright
+        run: npx playwright install --with-deps webkit
+
+      # Offline: kenteken parsing, listing extraction, DOM helpers, manifest wiring.
+      - name: Unit tests
+        run: npm run test:unit
+
+      # Loads the real popup and floating panel in WebKit. No network needed.
+      - name: UI tests
+        run: npm run test:ui
+
+      # test:e2e hits the live anwb.nl site and is deliberately excluded: it
+      # depends on a third party being up, and on their RDW lookup not erroring.
+      # Run it locally with `npm run test:e2e`.
