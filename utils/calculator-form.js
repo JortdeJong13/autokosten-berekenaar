@@ -219,13 +219,13 @@
           </div>
         </div>
 
-        <div class="cce-row">
-          <div class="cce-field">
+        <div class="cce-row" data-role="kmprice-row">
+          <div class="cce-field" data-role="mileage-field">
             <label class="cce-label" for="cce-mileage">Km-stand</label>
             <input type="text" id="cce-mileage" class="cce-input" data-role="mileage"
                    inputmode="numeric" placeholder="000.000" autocomplete="off" />
           </div>
-          <div class="cce-field">
+          <div class="cce-field" data-role="price-field">
             <label class="cce-label" for="cce-price">Aanschafprijs</label>
             <div class="cce-prefixed">
               <span class="cce-prefix">&euro;</span>
@@ -303,9 +303,12 @@
       feedback.hidden = true;
     }
 
-    // Vehicle details extracted from the listing. Used only when there is no
-    // plate, to drive ANWB's make/model form instead.
+    // Vehicle details extracted from the listing, used to describe the car if
+    // ANWB cannot resolve the plate.
     let vehicleDetails = null;
+
+    // Which values came from the listing, so those fields can be hidden.
+    const fromListing = { mileage: false, price: false };
 
     function hasVehicleDetails() {
       return Boolean(vehicleDetails && vehicleDetails.brand && vehicleDetails.model);
@@ -317,14 +320,34 @@
      * Hide it rather than leave a control on screen that does nothing.
      */
     function updatePlateHint() {
-      const field = mount.querySelector('[data-role="plate-field"]');
-      if (!field) return;
-
-      const known = hasVehicleDetails();
-      field.hidden = known;
-
+      updateFieldVisibility();
       // A "fill in a kenteken" complaint is obsolete once we know the car.
-      if (known) clearFeedback();
+      if (hasVehicleDetails() || fromListing.mileage || fromListing.price) clearFeedback();
+    }
+
+    /**
+     * Hide the fields the listing already answered.
+     *
+     * Everything here is extracted from the advert, so showing an editable box
+     * for it is redundant. Anything we did NOT get stays visible so it can be
+     * filled in by hand.
+     */
+    function updateFieldVisibility() {
+      const known = hasVehicleDetails();
+
+      const setHidden = (role, hidden) => {
+        const el = mount.querySelector(`[data-role="${role}"]`);
+        if (el) el.hidden = hidden;
+      };
+
+      setHidden('plate-field', known);
+      setHidden('mileage-field', fromListing.mileage);
+      setHidden('price-field', fromListing.price);
+
+      // Collapse the row entirely when both of its fields are gone, otherwise
+      // it leaves an empty gap above the settings.
+      const bothHidden = fromListing.mileage && fromListing.price;
+      setHidden('kmprice-row', bothHidden);
     }
 
     // Persist settings as soon as they change, so the next calculation uses them.
@@ -377,8 +400,11 @@
         kmPerYear: settings.kmPerYear,
         province: settings.province,
         carTitle: subtitle.dataset.carTitle || '',
-        // Present only on the make/model path; ignored when a plate is used.
-        vehicle: hasPlate ? null : vehicleDetails,
+        // Always sent, not only when there is no plate: ANWB can fail to
+        // resolve a plate that looks valid (a car not yet in the RDW
+        // register), and then we need these to describe the car instead.
+        // Gate this on `hasPlate` and the fallback has nothing to work with.
+        vehicle: vehicleDetails,
         timestamp: Date.now(),
       };
 
@@ -400,8 +426,14 @@
       /** Prefill the extracted AutoScout24 values. */
       setValues({ licensePlate, mileage: km, price: carPrice, title, vehicle } = {}) {
         if (licensePlate) plate.value = licensePlate;
-        if (Number.isFinite(km)) mileage.value = formatNumber(km);
-        if (Number.isFinite(carPrice)) price.value = formatNumber(carPrice);
+        if (Number.isFinite(km) && km > 0) {
+          mileage.value = formatNumber(km);
+          fromListing.mileage = true;
+        }
+        if (Number.isFinite(carPrice) && carPrice > 0) {
+          price.value = formatNumber(carPrice);
+          fromListing.price = true;
+        }
         if (vehicle) vehicleDetails = vehicle;
         this.setTitle(title);
         updatePlateHint();

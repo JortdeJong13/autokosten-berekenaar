@@ -135,18 +135,27 @@ console.log('popup/popup.html');
   check('empty plate with no vehicle details is blocked',
     /kenteken in|merk en model/i.test(blocked || ''), `got "${blocked}"`);
 
-  // With vehicle details, an empty plate is allowed and the field says so.
+  // --- With vehicle details, a plate is not required ---------------------
+  // Reset so these assertions see a clean slate.
   await page.evaluate(() => {
-    window.__form.setVehicleDetails({ brand: 'Mercedes-Benz', model: 'GLC 300' });
+    window.__tabs.length = 0;
+    window.chrome.__store.pendingCalculation = undefined;
+  });
+  await page.fill('[data-role="plate"]', '');
+  await page.evaluate(() => {
+    window.__form.setVehicleDetails({
+      brand: 'Mercedes-Benz', model: 'GLC 300', productionDate: '2021-01-01',
+    });
   });
   await page.waitForTimeout(100);
+
   const plateField = await page.evaluate(() => {
     const f = document.querySelector('[data-role="plate-field"]');
     return { hidden: f ? f.hidden : null, visible: f ? f.getBoundingClientRect().width > 0 : null };
   });
   check('the plate field is hidden once the car is known',
     plateField.hidden === true && plateField.visible === false, JSON.stringify(plateField));
-  // The panel should stay quiet: no notice about a missing plate.
+
   const quiet = await page.evaluate(() => {
     const f = document.querySelector('[data-role="feedback"]');
     return { hidden: f ? f.hidden : true, text: f ? f.textContent : '' };
@@ -156,16 +165,50 @@ console.log('popup/popup.html');
 
   await page.click('[data-role="submit"]');
   await page.waitForTimeout(400);
-  const after = await page.evaluate(() => {
+  const noPlate = await page.evaluate(() => {
     const p = window.chrome.__store.pendingCalculation;
-    return { tabs: window.__tabs, plate: p ? p.licensePlate : 'no payload',
-             vehicle: p ? p.vehicle : null };
+    return { tabs: window.__tabs, plate: p ? p.licensePlate : 'no payload', vehicle: p?.vehicle ?? null };
   });
   check('opens the ANWB tab without a plate when vehicle details exist',
-    after.tabs.length === 1 && after.tabs[0].includes('anwb.nl'), JSON.stringify(after));
+    noPlate.tabs.length === 1 && noPlate.tabs[0].includes('anwb.nl'), JSON.stringify(noPlate));
   check('payload carries the vehicle details, not a plate',
-    after.plate === null && after.vehicle?.brand === 'Mercedes-Benz' && after.vehicle?.model === 'GLC 300',
-    JSON.stringify(after));
+    noPlate.plate === null && noPlate.vehicle?.brand === 'Mercedes-Benz',
+    JSON.stringify(noPlate));
+
+  // --- A listing WITH a plate must still carry the vehicle details --------
+  // ANWB can fail to resolve a plate that looks valid (a car not yet in the
+  // RDW register). Gating the payload on "no plate" left the fallback with
+  // nothing to describe the car, which is the bug this guards.
+  await page.evaluate(() => {
+    window.__tabs.length = 0;
+    window.chrome.__store.pendingCalculation = undefined;
+    window.__form.setVehicleDetails(null);
+    window.__form.setValues({
+      licensePlate: 'X-353-NB', mileage: 68500, price: 24950,
+      title: 'Audi A3', vehicle: { brand: 'Audi', model: 'A3', productionDate: '2021-01-01' },
+    });
+  });
+  await page.waitForTimeout(100);
+  await page.click('[data-role="submit"]');
+  await page.waitForTimeout(400);
+  const withPlate = await page.evaluate(() => window.chrome.__store.pendingCalculation);
+  check('vehicle details are sent even when a plate is present',
+    withPlate?.licensePlate && withPlate?.vehicle?.brand === 'Audi',
+    JSON.stringify({ plate: withPlate?.licensePlate, vehicle: withPlate?.vehicle }));
+
+  // --- Fields the listing already answered are hidden --------------------
+  const visibility = await page.evaluate(() => {
+    const vis = (role) => {
+      const el = document.querySelector(`[data-role="${role}"]`);
+      return el ? el.getBoundingClientRect().width > 0 : null;
+    };
+    return { plate: vis('plate-field'), mileage: vis('mileage-field'), price: vis('price-field') };
+  });
+  // The car is known here (via both a plate and vehicle details), so every
+  // field the listing answered is hidden; only the settings remain.
+  check('every field the listing answered is hidden',
+    visibility.plate === false && visibility.mileage === false && visibility.price === false,
+    JSON.stringify(visibility));
 
   await context.close();
 }
