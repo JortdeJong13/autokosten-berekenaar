@@ -160,6 +160,88 @@ console.log('\nAutoScout24 floating panel');
   await context.close();
 }
 
+// ---------------------------------------------------------------------------
+console.log('\nlaunch() behaviour');
+// ---------------------------------------------------------------------------
+{
+  // Popup context: has chrome.tabs, so it must open the tab itself and not
+  // round-trip through the background.
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      window.__created = [];
+      window.__messages = [];
+      window.chrome = {
+        storage: { local: { set: (i, cb) => cb && cb(), get: (k, cb) => cb({}), remove: (k, cb) => cb && cb() } },
+        tabs: { create: (opts) => window.__created.push(opts.url) },
+        runtime: { lastError: null, sendMessage: (m, cb) => { window.__messages.push(m.action); cb && cb({ success: true }); } },
+      };
+    });
+    await page.goto(fileUrl('popup/popup.html'), { waitUntil: 'load' });
+    await page.waitForTimeout(300);
+
+    await page.evaluate(() => window.CalculatorForm.launch({ licensePlate: 'X-353-NB' }));
+    await page.waitForTimeout(300);
+
+    const res = await page.evaluate(() => ({ created: window.__created, messages: window.__messages }));
+    check('popup opens the tab directly', res.created.length === 1 && res.created[0].includes('anwb.nl'),
+      JSON.stringify(res));
+    check('popup does not rely on the background', res.messages.length === 0, JSON.stringify(res));
+    await context.close();
+  }
+
+  // Content-script context: no chrome.tabs, so the background must open it.
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      window.__messages = [];
+      window.__opened = [];
+      window.open = (url) => { window.__opened.push(url); return null; };
+      window.chrome = {
+        storage: { local: { set: (i, cb) => cb && cb(), get: (k, cb) => cb({}), remove: (k, cb) => cb && cb() } },
+        runtime: { lastError: null, sendMessage: (m, cb) => { window.__messages.push(m.action); cb && cb({ success: true }); } },
+      };
+    });
+    await page.goto(fileUrl('popup/popup.html'), { waitUntil: 'load' });
+    await page.waitForTimeout(300);
+
+    await page.evaluate(() => window.CalculatorForm.launch({ licensePlate: 'X-353-NB' }));
+    await page.waitForTimeout(400);
+
+    const res = await page.evaluate(() => ({ messages: window.__messages, opened: window.__opened }));
+    check('content script delegates to the background', res.messages.includes('startCalculation'), JSON.stringify(res));
+    check('no duplicate tab when the background answers', res.opened.length === 0, JSON.stringify(res));
+    await context.close();
+  }
+
+  // Background is asleep: sendMessage never calls back, so we must fall back.
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      window.__opened = [];
+      window.open = (url) => { window.__opened.push(url); return null; };
+      window.chrome = {
+        storage: { local: { set: (i, cb) => cb && cb(), get: (k, cb) => cb({}), remove: (k, cb) => cb && cb() } },
+        // Never invokes the callback, mimicking an unloaded background page.
+        runtime: { lastError: null, sendMessage: () => {} },
+      };
+    });
+    await page.goto(fileUrl('popup/popup.html'), { waitUntil: 'load' });
+    await page.waitForTimeout(300);
+
+    await page.evaluate(() => window.CalculatorForm.launch({ licensePlate: 'X-353-NB' }));
+    await page.waitForTimeout(3600); // just past the 3s fallback timer
+
+    const res = await page.evaluate(() => ({ opened: window.__opened }));
+    check('falls back to opening the tab when the background is asleep',
+      res.opened.length === 1 && res.opened[0].includes('anwb.nl'), JSON.stringify(res));
+    await context.close();
+  }
+}
+
 await browser.close();
 
 console.log(failures === 0 ? '\nPASS' : `\nFAIL (${failures} failed)`);

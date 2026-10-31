@@ -106,12 +106,17 @@
   /**
    * Open the ANWB calculator with the pending payload already stored.
    *
-   * Safari's popup does not always expose `chrome.tabs`, and its message
-   * delivery is flaky when the background page isn't running, so this tries
-   * the background message first and falls back to opening the tab directly.
+   * Who opens the tab depends on where we are:
+   *   - The popup can call `chrome.tabs.create` itself, so it does — one tab,
+   *     no round trip.
+   *   - A content script has no `chrome.tabs` access, so it asks the background
+   *     page, which owns tab creation for that case.
+   *
+   * Either way the payload is already in storage, so the ANWB content script
+   * picks it up when the page loads.
    */
   function launch(payload) {
-    const openTab = () => {
+    const openTabDirectly = () => {
       if (root.chrome?.tabs?.create) {
         root.chrome.tabs.create({ url: ANWB_URL, active: true });
       } else {
@@ -120,41 +125,59 @@
     };
 
     if (!root.chrome?.storage?.local) {
-      openTab();
+      openTabDirectly();
       return Promise.resolve();
     }
 
-    return new Promise((resolve) => {
+    const storeThenOpen = () => new Promise((resolve) => {
       root.chrome.storage.local.set({ pendingCalculation: payload }, () => {
-        if (!root.chrome?.runtime?.sendMessage) {
-          openTab();
+        // The popup (and any context with tab access) opens the tab itself.
+        if (root.chrome?.tabs?.create) {
+          openTabDirectly();
           resolve();
           return;
         }
 
+        if (!root.chrome?.runtime?.sendMessage) {
+          openTabDirectly();
+          resolve();
+          return;
+        }
+
+        // Content script: only the background can create a tab.
         let settled = false;
-        const settle = (fromBackground) => {
+        const settle = (opened) => {
           if (settled) return;
           settled = true;
-          if (!fromBackground) openTab();
+          if (!opened) {
+            console.warn('[CarCostExtension] Background gaf geen antwoord, tab zelf openen.');
+            openTabDirectly();
+          }
           resolve();
         };
 
-        // If the background page never answers, open the tab ourselves.
-        const timer = setTimeout(() => settle(false), 700);
+        // Last-resort net for the case where the background never answers.
+        const timer = setTimeout(() => settle(false), 3000);
 
         try {
           root.chrome.runtime.sendMessage({ action: 'startCalculation', data: payload }, (response) => {
             clearTimeout(timer);
-            if (root.chrome.runtime.lastError || !response?.success) settle(false);
-            else settle(true);
+            if (root.chrome.runtime.lastError) {
+              console.warn('[CarCostExtension] sendMessage fout:', root.chrome.runtime.lastError.message);
+              settle(false);
+            } else {
+              settle(Boolean(response?.success));
+            }
           });
         } catch (err) {
           clearTimeout(timer);
+          console.warn('[CarCostExtension] sendMessage mislukt:', err);
           settle(false);
         }
       });
     });
+
+    return storeThenOpen();
   }
 
   // --- Rendering ------------------------------------------------------------
