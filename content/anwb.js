@@ -308,6 +308,55 @@
   }
 
   /**
+   * Re-assert every value we control, immediately before submitting.
+   *
+   * Each answer makes ANWB re-render the form, and a re-render can drop a value
+   * that was set moments earlier — the change lands in the DOM but not in
+   * React's state, so React then paints its own (empty) value back. Verifying
+   * once after setting is not enough, because the wipe can come later.
+   *
+   * So before submitting, check them all and repair whatever went missing,
+   * looping because a repair can itself trigger another re-render.
+   */
+  async function reassertFields(desired) {
+    for (let pass = 1; pass <= 4; pass++) {
+      guard();
+
+      const broken = [];
+      for (const [name, want] of Object.entries(desired)) {
+        if (want == null) continue;
+
+        const el = field(`select[name="${name}"]`);
+        if (!el) continue;
+
+        // Already correct: the select holds the option matching `want`.
+        const current = el.options[el.selectedIndex];
+        const matches = current && (current.value === String(want)
+          || current.text.trim().toLowerCase() === String(want).toLowerCase());
+        if (matches) continue;
+
+        broken.push(name);
+      }
+
+      if (!broken.length) return;
+
+      console.log(`[AutokostenBerekenaar] Opnieuw instellen (ronde ${pass}):`, broken.join(', '));
+
+      for (const name of broken) {
+        try {
+          await setSelectAndVerify(name, desired[name], { timeout: 8000, attempts: 2 });
+        } catch (err) {
+          // A field that vanished is not necessarily fatal: ANWB only shows
+          // fuel/doors for some cars.
+          console.warn(`[AutokostenBerekenaar] ${name} opnieuw instellen mislukt:`, err.message);
+        }
+      }
+
+      await sleep(600);
+    }
+  }
+
+  /**
    * Fallback flow — make/model, used when the listing has no licence plate.
    *
    * The form is dynamic: it asks Merk, Model, Bouwjaar, Bouwmaand, and *only
@@ -319,6 +368,72 @@
    * "3-Serie"), so a low-confidence match is surfaced to the user rather than
    * silently trusted — a wrong model produces a plausible but wrong cost.
    */
+  /**
+   * Decide what to put in ANWB's fuel dropdown.
+   *
+   * `mapFuel` covers the common AS24 labels. When it returns nothing but ANWB
+   * is still asking, fall back to the closest option present rather than
+   * submitting an empty field, which ANWB rejects:
+   *
+   *   - a plug-in hybrid label we did not recognise maps to a PHEV option
+   *   - a "Waterstof"/"Overig" style label has no close match, so take the
+   *     first real option and let the user correct it if it matters
+   */
+  function resolveFuelOption(vehicle, fuelSelect) {
+    const V = VehicleUtils;
+    const direct = V.mapFuel(vehicle.fuel);
+    if (direct) return direct;
+
+    const raw = String(vehicle.fuel || '');
+    const options = Array.from(fuelSelect.options).map((o) => o.text.trim());
+    const has = (needle) => options.find((t) => new RegExp(needle, 'i').test(t)) || null;
+
+    // Anything mentioning electricity alongside a fuel is a plug-in hybrid.
+    if (/elektro|hybrid|phev/i.test(raw)) {
+      const phev = has('phev.*benzine') || has('phev') || has('benzine');
+      if (phev) return phev;
+    }
+
+    // Diesel mentioned anywhere is a better guess than nothing.
+    if (/diesel/i.test(raw)) {
+      const diesel = has('diesel');
+      if (diesel) return diesel;
+    }
+
+    // Last resort: ANWB is asking and silence fails validation, so pick a real
+    // option. The banner reports the choice, so it is visible, not silent.
+    const fallback = options[0] || null;
+    if (fallback) {
+      console.warn(`[AutokostenBerekenaar] Brandstof "${raw}" onbekend; "${fallback}" gekozen.`);
+    }
+    return fallback;
+  }
+
+  /** The value each select should end up holding, keyed by select name. */
+  function buildDesiredValues(vehicle) {
+    const V = VehicleUtils;
+    return {
+      brand: currentSelectedText('brand'),
+      model: currentSelectedText('model'),
+      licensePlateYear: vehicle.year ? String(vehicle.year) : null,
+      licensePlateMonth: vehicle.month ? V.monthName(vehicle.month) : null,
+      // Only assert fuel when ANWB is actually asking for it, and never with a
+      // null value — that would force the field back to its placeholder.
+      fuel: (() => {
+        const el = field('select[name="fuel"]');
+        if (!el || el.disabled || el.options.length < 2) return null;
+        return resolveFuelOption(vehicle, el);
+      })(),
+    };
+  }
+
+  /** The text of the currently selected option, or null. */
+  function currentSelectedText(name) {
+    const el = field(`select[name="${name}"]`);
+    if (!el || !el.value) return null;
+    return el.options[el.selectedIndex]?.text?.trim() || null;
+  }
+
   async function doMerkModel(data, filled) {
     const vehicle = data.vehicle || {};
     const V = VehicleUtils;
@@ -391,23 +506,40 @@
       setStatus(`Bouwmaand gekozen: ${V.monthName(vehicle.month)}`, { step: 42 });
     }
 
-    // --- Extra fields, only present for some cars ---
-    if (!filled.has('extra')) {
+    // --- Fuel, present only for cars ANWB cannot infer it for ---
+    if (!filled.has('fuel')) {
       const fuelSelect = field('select[name="fuel"]');
-      if (fuelSelect && fuelSelect.options.length > 1) {
-        const fuel = V.mapFuel(vehicle.fuel);
-        // A pure-electric car has no ANWB fuel option; leaving it unset is
-        // correct, and ANWB does not require the field in that case.
-        if (fuel) await setSelectAndVerify('fuel', fuel, { timeout: 8000, attempts: 2 });
-        filled.add('extra');
+      // A disabled fuel select means ANWB filled it from the configuration, and
+      // it needs no answer from us.
+      if (fuelSelect && !fuelSelect.disabled && fuelSelect.options.length > 1) {
+        const fuel = resolveFuelOption(vehicle, fuelSelect);
+
+        if (fuel) {
+          await setSelectAndVerify('fuel', fuel, { timeout: 10000, attempts: 3 });
+          setStatus(`Brandstof gekozen: ${fuel}`, { step: 40 });
+        } else {
+          // Nothing mapped and the field is asking for an answer: submitting
+          // now would fail validation with "Selecteer een brandstof".
+          console.warn('[AutokostenBerekenaar] Geen brandstofkoppeling voor:', vehicle.fuel);
+        }
+        filled.add('fuel');
       }
     }
+
+    // Repair anything ANWB wiped during a re-render before we submit.
+    await reassertFields(buildDesiredValues(vehicle));
 
     await advance(
       /volgende stap/i,
       () => !screen.isMerkModel() || screen.isUitvoering() || screen.isOpties() || screen.isAanschaf(),
       { step: 45 }
     );
+
+    // If the step did not move, the submit was rejected; repair and retry.
+    if (screen.isMerkModel()) {
+      await reassertFields(buildDesiredValues(vehicle));
+    }
+
     filled.clear();
   }
 

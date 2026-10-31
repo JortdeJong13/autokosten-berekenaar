@@ -137,6 +137,28 @@ test('does not guess when the fuel is unknown', () => {
   assert.strictEqual(VehicleUtils.mapFuel('Waterstof'), null);
 });
 
+console.log('\nvehicle — fuel taxonomy (from AS24\'s own filter list)');
+
+test('maps every AS24 fuel label that has an ANWB equivalent', () => {
+  // This is AS24's complete fuel taxonomy, taken from its search filters.
+  const pairs = {
+    'Elektro/Benzine': 'PHEV Benzine',
+    'Elektro/Diesel': 'PHEV Diesel',
+    Benzine: 'Benzine',
+    Diesel: 'Diesel',
+  };
+  for (const [as24, anwb] of Object.entries(pairs)) {
+    assert.strictEqual(VehicleUtils.mapFuel(as24), anwb, `${as24} should map to ${anwb}`);
+  }
+});
+
+test('returns null for fuels ANWB has no option for', () => {
+  // ANWB's dropdown only offers Benzine, Diesel, PHEV Benzine, PHEV Diesel.
+  for (const label of ['Elektrisch', 'LPG', 'Ethanol', 'Gecomprimeerd aardgas', 'Waterstof', 'Overig']) {
+    assert.strictEqual(VehicleUtils.mapFuel(label), null, `${label} has no ANWB option`);
+  }
+});
+
 console.log('\nvehicle — transmission and dates');
 
 test('maps transmission labels', () => {
