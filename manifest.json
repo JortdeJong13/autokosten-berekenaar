@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "AutoScout24 naar ANWB Autokosten",
+  "version": "1.1.0",
+  "description": "Bereken direct de autokosten op anwb.nl voor occasions op autoscout24.nl",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "ANWB Autokosten Berekenen",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.autoscout24.nl/*",
+    "https://www.anwb.nl/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.autoscout24.nl/aanbod/*"
+      ],
+      "js": [
+        "utils/kenteken.js",
+        "utils/calculator-form.js",
+        "content/autoscout.js"
+      ],
+      "css": [
+        "content/form.css",
+        "content/autoscout.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.anwb.nl/auto/autokosten/berekenen*"
+      ],
+      "js": [
+        "utils/kenteken.js",
+        "utils/dom-utils.js",
+        "content/anwb.js"
+      ],
+      "css": [
+        "content/anwb.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

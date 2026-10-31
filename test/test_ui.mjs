@@ -1,0 +1,166 @@
+/**
+ * UI tests: load the real popup HTML and the real AutoScout24 floating panel in
+ * WebKit and assert they render the shared form and behave correctly.
+ *
+ * These catch wiring mistakes (a file missing from the manifest, a renamed
+ * helper) that unit tests on pure functions cannot see.
+ *
+ *   node test/test_ui.mjs
+ */
+import { webkit } from 'playwright';
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
+const fileUrl = (p) => pathToFileURL(path.join(ROOT, p)).href;
+
+let failures = 0;
+function check(name, condition, detail = '') {
+  if (condition) {
+    console.log(`  ✓ ${name}`);
+  } else {
+    failures++;
+    console.error(`  ✗ ${name}${detail ? `\n    ${detail}` : ''}`);
+  }
+}
+
+const browser = await webkit.launch({ headless: true });
+
+// ---------------------------------------------------------------------------
+console.log('popup/popup.html');
+// ---------------------------------------------------------------------------
+{
+  const context = await browser.newContext({ viewport: { width: 400, height: 700 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  // chrome.* shim, installed before the popup's own scripts run.
+  await page.addInitScript(() => {
+    const store = {};
+    window.chrome = {
+      __store: store,
+      storage: { local: {
+        get: (keys, cb) => { const out = {}; for (const k of [].concat(keys)) if (k in store) out[k] = store[k]; cb(out); },
+        set: (items, cb) => { Object.assign(store, items); cb && cb(); },
+        remove: (keys, cb) => { for (const k of [].concat(keys)) delete store[k]; cb && cb(); },
+      } },
+      runtime: { lastError: null, sendMessage: (msg, cb) => cb && cb({ success: true }) },
+    };
+  });
+
+  // file:// pages can load sibling scripts, which is enough to exercise the popup.
+  await page.goto(fileUrl('popup/popup.html'), { waitUntil: 'load' });
+  await page.waitForTimeout(700);
+
+  check('renders without JS errors', errors.length === 0, errors.join('\n'));
+
+  const ui = await page.evaluate(() => ({
+    hasForm: !!document.querySelector('.cce-form'),
+    hasPlate: !!document.querySelector('[data-role="plate"]'),
+    hasMileage: !!document.querySelector('[data-role="mileage"]'),
+    hasPrice: !!document.querySelector('[data-role="price"]'),
+    hasYears: !!document.querySelector('[data-role="years"]'),
+    hasKmPerYear: !!document.querySelector('[data-role="kmPerYear"]'),
+    hasProvince: !!document.querySelector('[data-role="province"]'),
+    mileageLabel: document.querySelector('label[for="cce-mileage"]')?.textContent.trim(),
+    yearsDefault: document.querySelector('[data-role="years"]')?.value,
+    provinceDefault: document.querySelector('[data-role="province"]')?.value,
+    kmPerYearDefault: document.querySelector('[data-role="kmPerYear"]')?.value,
+    provinceCount: document.querySelector('[data-role="province"]')?.options.length,
+    // The trailing "km" that collided with the stepper must be gone.
+    hasTrailingKm: /km\s*$/i.test(document.querySelector('.cce-prefixed, .cce-row')?.textContent || ''),
+  }));
+
+  check('shared form rendered', ui.hasForm);
+  check('all fields present', ui.hasPlate && ui.hasMileage && ui.hasPrice && ui.hasYears && ui.hasKmPerYear && ui.hasProvince);
+  check('label reads "Km-stand"', ui.mileageLabel === 'Km-stand', `got "${ui.mileageLabel}"`);
+  check('defaults applied (8 jaar / 10.000 / Noord-Holland)',
+    ui.yearsDefault === '8' && ui.kmPerYearDefault === '10.000' && ui.provinceDefault === 'Noord-Holland',
+    JSON.stringify(ui));
+  check('all 12 provinces listed', ui.provinceCount === 12, `got ${ui.provinceCount}`);
+
+  // Number formatting on input.
+  await page.fill('[data-role="mileage"]', '205557');
+  const mileage = await page.inputValue('[data-role="mileage"]');
+  check('km-stand formats with dots', mileage === '205.557', `got "${mileage}"`);
+
+  await page.fill('[data-role="price"]', '32950');
+  const price = await page.inputValue('[data-role="price"]');
+  check('price formats with dots', price === '32.950', `got "${price}"`);
+
+  // Settings round-trip through the form.
+  await page.selectOption('[data-role="years"]', '5');
+  await page.fill('[data-role="kmPerYear"]', '15000');
+  await page.selectOption('[data-role="province"]', 'Utrecht');
+  const saved = await page.evaluate(() => window.chrome?.__store?.settings);
+  check('settings persist to storage',
+    saved?.ownershipYears === 5 && saved?.kmPerYear === 15000 && saved?.province === 'Utrecht',
+    JSON.stringify(saved));
+
+  // Invalid kenteken is rejected with a message.
+  await page.fill('[data-role="plate"]', 'ABC');
+  await page.click('[data-role="submit"]');
+  await page.waitForTimeout(200);
+  const feedback = await page.textContent('[data-role="feedback"]');
+  check('invalid kenteken shows an error', /geldig/i.test(feedback || ''), `got "${feedback}"`);
+
+  await context.close();
+}
+
+// ---------------------------------------------------------------------------
+console.log('\nAutoScout24 floating panel');
+// ---------------------------------------------------------------------------
+{
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  // A stand-in for an AutoScout24 listing page.
+  await page.setContent(`<!DOCTYPE html><html lang="nl"><body>
+    <h1>Audi Q4 e-tron 35 S edition</h1>
+    <dl><dt>Kenteken</dt><dd>X-353-NB</dd></dl>
+    <div data-testid="VehicleDetails-mileage_road">68.500 km</div>
+  </body></html>`);
+
+  // Load the exact scripts the manifest injects for AutoScout24.
+  await page.addScriptTag({ content: read('utils/kenteken.js') });
+  await page.addScriptTag({ content: read('utils/calculator-form.js') });
+  await page.addScriptTag({ content: read('content/autoscout.js') });
+  await page.waitForTimeout(400);
+
+  check('injects without JS errors', errors.length === 0, errors.join('\n'));
+  check('floating button present', await page.locator('#anwb-floating-trigger').count() === 1);
+
+  // Panel starts hidden, opens on click, and shows the shared form.
+  check('panel starts hidden', await page.locator('#anwb-floating-card').isHidden());
+
+  await page.click('#anwb-floating-trigger');
+  await page.waitForTimeout(400);
+
+  check('panel opens', await page.locator('#anwb-floating-card').isVisible());
+  check('panel renders the shared form', await page.locator('.anwb-floating-card .cce-form').count() === 1);
+  check('panel has the settings controls', await page.locator('.anwb-floating-card [data-role="province"]').count() === 1);
+
+  const panelValues = await page.evaluate(() => ({
+    plate: document.querySelector('.anwb-floating-card [data-role="plate"]')?.value,
+    mileage: document.querySelector('.anwb-floating-card [data-role="mileage"]')?.value,
+  }));
+  check('prefilled from the page', panelValues.plate === 'X-353-NB' && panelValues.mileage === '68.500',
+    JSON.stringify(panelValues));
+
+  // Emoji-free chrome.
+  const panelText = await page.textContent('.anwb-floating-card');
+  check('no emojis in the panel', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(panelText), panelText.slice(0, 120));
+
+  await context.close();
+}
+
+await browser.close();
+
+console.log(failures === 0 ? '\nPASS' : `\nFAIL (${failures} failed)`);
+process.exit(failures === 0 ? 0 : 1);

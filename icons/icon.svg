@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#003580" />
+      <stop offset="100%" stop-color="#001a40" />
+    </linearGradient>
+    <linearGradient id="yellowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffdd00" />
+      <stop offset="100%" stop-color="#f5a623" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background with smooth rounded corners -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bgGrad)" />
+
+  <!-- Car silhouette -->
+  <path d="M28 72 L38 48 C40 44, 44 42, 49 42 L79 42 C84 42, 88 44, 90 48 L100 72 C104 73, 106 76, 106 80 L106 90 C106 93, 104 95, 101 95 L97 95 C94 95, 92 93, 92 90 L92 88 L36 88 L36 90 C36 93, 34 95, 31 95 L27 95 C24 95, 22 93, 22 90 L22 80 C22 76, 24 73, 28 72 Z" fill="#ffffff" />
+
+  <!-- Car windshield -->
+  <path d="M42 50 L86 50 C88 50, 90 52, 89 54 L84 66 C83 68, 81 69, 79 69 L49 69 C47 69, 45 68, 44 66 L39 54 C38 52, 40 50, 42 50 Z" fill="#002f6c" />
+
+  <!-- Car headlights -->
+  <circle cx="34" cy="77" r="5" fill="url(#yellowGrad)" />
+  <circle cx="94" cy="77" r="5" fill="url(#yellowGrad)" />
+
+  <!-- Calculator / Euro Badge -->
+  <circle cx="96" cy="32" r="22" fill="url(#yellowGrad)" stroke="#ffffff" stroke-width="3" />
+  <text x="96" y="41" font-family="-apple-system, sans-serif" font-size="24" font-weight="900" fill="#002f6c" text-anchor="middle">€</text>
+</svg>

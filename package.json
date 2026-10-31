@@ -1,0 +1,25 @@
+{
+  "name": "car-cost-extension",
+  "version": "1.0.0",
+  "description": "Safari Web Extension linking AutoScout24.nl occasions to ANWB Autokosten Calculator",
+  "main": "background.js",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:ui && npm run test:e2e",
+    "test:unit": "node test/test_kenteken.js && node test/test_extraction.js && node test/test_dom_utils.js && node test/test_manifest.js",
+    "test:ui": "node test/test_ui.mjs",
+    "test:e2e": "node test/test_anwb_e2e.mjs",
+    "generate-icons": "node scripts/generate-icons.js"
+  },
+  "keywords": [
+    "safari-extension",
+    "webextension",
+    "autoscout24",
+    "anwb",
+    "autokosten"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

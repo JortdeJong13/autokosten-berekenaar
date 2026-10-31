@@ -1,0 +1,394 @@
+/**
+ * The one calculator form, shared by the AutoScout24 floating panel and the
+ * toolbar popup so both surfaces stay identical.
+ *
+ * Owns:
+ *   - the fields (kenteken, km-stand, aanschafprijs)
+ *   - the editable settings (bezitsduur, km per jaar, provincie), persisted to
+ *     chrome.storage.local under `settings`
+ *   - Dutch number formatting for the km/price inputs
+ *   - validation and launching the ANWB calculator
+ *
+ * Styling lives in content/form.css (class prefix `cce-`), which both surfaces
+ * load.
+ */
+
+(function (root, factory) {
+  // `root` is the global (window/self) in a browser; the factory needs it to
+  // reach chrome.*, KentekenUtils and window.open.
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory(root);
+  } else {
+    root.CalculatorForm = factory(root);
+  }
+})(typeof self !== 'undefined' ? self : this, function (root) {
+  'use strict';
+
+  // Safari and Firefox expose the same API as `browser`; Chrome (and Safari's
+  // compatibility layer) as `chrome`. Normalise once.
+  if (root && !root.chrome && root.browser) root.chrome = root.browser;
+
+  const PROVINCES = [
+    'Drenthe', 'Flevoland', 'Friesland', 'Gelderland', 'Groningen', 'Limburg',
+    'Noord-Brabant', 'Noord-Holland', 'Overijssel', 'Utrecht', 'Zeeland', 'Zuid-Holland',
+  ];
+
+  const OWNERSHIP_YEARS = Array.from({ length: 15 }, (_, i) => i + 1);
+
+  const DEFAULT_SETTINGS = {
+    ownershipYears: 8,
+    kmPerYear: 10000,
+    province: 'Noord-Holland',
+  };
+
+  const ANWB_URL = 'https://www.anwb.nl/auto/autokosten/berekenen';
+  const MAX_DIGITS = 7; // up to 9.999.999
+
+  // --- Dutch number formatting ---------------------------------------------
+
+  /** 205557 -> "205.557" */
+  function formatNumber(value) {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+    return Number(digits).toLocaleString('nl-NL');
+  }
+
+  /** "205.557" -> 205557 */
+  function parseNumber(text) {
+    const digits = String(text ?? '').replace(/\D/g, '');
+    return digits ? Number.parseInt(digits, 10) : 0;
+  }
+
+  /**
+   * Reformat as the user types, keeping the caret next to the same digit so
+   * inserting separators doesn't shove the cursor to the end.
+   */
+  function attachNumberFormatting(input) {
+    input.addEventListener('input', () => {
+      const raw = input.value;
+      const caret = input.selectionStart ?? raw.length;
+      const digitsBeforeCaret = raw.slice(0, caret).replace(/\D/g, '').length;
+
+      const digits = raw.replace(/\D/g, '').slice(0, MAX_DIGITS);
+      input.value = digits ? Number(digits).toLocaleString('nl-NL') : '';
+
+      // Walk to the position that has `digitsBeforeCaret` digits behind it.
+      let pos = 0;
+      let seen = 0;
+      while (pos < input.value.length && seen < digitsBeforeCaret) {
+        if (/\d/.test(input.value[pos])) seen++;
+        pos++;
+      }
+      input.setSelectionRange(pos, pos);
+    });
+  }
+
+  // --- Settings persistence -------------------------------------------------
+
+  function readSettings() {
+    return new Promise((resolve) => {
+      if (!root.chrome?.storage?.local) return resolve({ ...DEFAULT_SETTINGS });
+      root.chrome.storage.local.get(['settings'], (result) => {
+        resolve({ ...DEFAULT_SETTINGS, ...(result?.settings || {}) });
+      });
+    });
+  }
+
+  function writeSettings(settings) {
+    return new Promise((resolve) => {
+      if (!root.chrome?.storage?.local) return resolve();
+      root.chrome.storage.local.set({ settings }, resolve);
+    });
+  }
+
+  // --- Launching ------------------------------------------------------------
+
+  /**
+   * Open the ANWB calculator with the pending payload already stored.
+   *
+   * Safari's popup does not always expose `chrome.tabs`, and its message
+   * delivery is flaky when the background page isn't running, so this tries
+   * the background message first and falls back to opening the tab directly.
+   */
+  function launch(payload) {
+    const openTab = () => {
+      if (root.chrome?.tabs?.create) {
+        root.chrome.tabs.create({ url: ANWB_URL, active: true });
+      } else {
+        root.open(ANWB_URL, '_blank');
+      }
+    };
+
+    if (!root.chrome?.storage?.local) {
+      openTab();
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      root.chrome.storage.local.set({ pendingCalculation: payload }, () => {
+        if (!root.chrome?.runtime?.sendMessage) {
+          openTab();
+          resolve();
+          return;
+        }
+
+        let settled = false;
+        const settle = (fromBackground) => {
+          if (settled) return;
+          settled = true;
+          if (!fromBackground) openTab();
+          resolve();
+        };
+
+        // If the background page never answers, open the tab ourselves.
+        const timer = setTimeout(() => settle(false), 700);
+
+        try {
+          root.chrome.runtime.sendMessage({ action: 'startCalculation', data: payload }, (response) => {
+            clearTimeout(timer);
+            if (root.chrome.runtime.lastError || !response?.success) settle(false);
+            else settle(true);
+          });
+        } catch (err) {
+          clearTimeout(timer);
+          settle(false);
+        }
+      });
+    });
+  }
+
+  // --- Rendering ------------------------------------------------------------
+
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  /**
+   * Render the form into `mount`.
+   *
+   * options:
+   *   title      {string}  heading text (omit to hide the header)
+   *   onClose    {fn}      renders a close button when provided
+   *   onSubmit   {fn}      called with the payload after launch; return false
+   *                        to keep the form open
+   */
+  function render(mount, options = {}) {
+    const { title = 'ANWB Autokosten', onClose = null } = options;
+
+    mount.innerHTML = `
+      ${title || onClose ? `
+        <div class="cce-header">
+          <span class="cce-title">${escapeHtml(title)}</span>
+          ${onClose ? '<button type="button" class="cce-close" data-role="close" aria-label="Sluiten">&times;</button>' : ''}
+        </div>` : ''}
+
+      <p class="cce-subtitle" data-role="subtitle"></p>
+
+      <form class="cce-form" novalidate>
+        <div class="cce-field">
+          <label class="cce-label" for="cce-plate">Kenteken</label>
+          <div class="cce-plate">
+            <span class="cce-plate-nl">NL</span>
+            <input type="text" id="cce-plate" class="cce-plate-input" data-role="plate"
+                   placeholder="XX-XX-XX" maxlength="9" autocomplete="off" spellcheck="false" />
+          </div>
+        </div>
+
+        <div class="cce-row">
+          <div class="cce-field">
+            <label class="cce-label" for="cce-mileage">Km-stand</label>
+            <input type="text" id="cce-mileage" class="cce-input" data-role="mileage"
+                   inputmode="numeric" placeholder="000.000" autocomplete="off" />
+          </div>
+          <div class="cce-field">
+            <label class="cce-label" for="cce-price">Aanschafprijs</label>
+            <div class="cce-prefixed">
+              <span class="cce-prefix">&euro;</span>
+              <input type="text" id="cce-price" class="cce-input" data-role="price"
+                     inputmode="numeric" placeholder="00.000" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <fieldset class="cce-settings">
+          <legend class="cce-legend">Uitgangspunten</legend>
+          <div class="cce-row">
+            <div class="cce-field">
+              <label class="cce-label" for="cce-years">Bezitsduur</label>
+              <select id="cce-years" class="cce-select" data-role="years"></select>
+            </div>
+            <div class="cce-field">
+              <label class="cce-label" for="cce-kmyear">Km per jaar</label>
+              <input type="text" id="cce-kmyear" class="cce-input" data-role="kmPerYear"
+                     inputmode="numeric" placeholder="00.000" autocomplete="off" />
+            </div>
+          </div>
+          <div class="cce-field">
+            <label class="cce-label" for="cce-province">Provincie</label>
+            <select id="cce-province" class="cce-select" data-role="province"></select>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="cce-submit" data-role="submit">
+          <span data-role="submit-label">Bereken op ANWB.nl</span>
+        </button>
+
+        <div class="cce-feedback" data-role="feedback" hidden></div>
+      </form>
+    `;
+
+    const $ = (role) => mount.querySelector(`[data-role="${role}"]`);
+    const plate = $('plate');
+    const mileage = $('mileage');
+    const price = $('price');
+    const kmPerYear = $('kmPerYear');
+    const years = $('years');
+    const province = $('province');
+    const subtitle = $('subtitle');
+    const feedback = $('feedback');
+    const submit = $('submit');
+    const submitLabel = $('submit-label');
+
+    years.innerHTML = OWNERSHIP_YEARS
+      .map((n) => `<option value="${n}">${n} jaar</option>`)
+      .join('');
+    province.innerHTML = PROVINCES
+      .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+      .join('');
+
+    attachNumberFormatting(mileage);
+    attachNumberFormatting(price);
+    attachNumberFormatting(kmPerYear);
+
+    plate.addEventListener('input', () => {
+      plate.value = plate.value.toUpperCase();
+      const formatted = root.KentekenUtils?.format(plate.value);
+      if (formatted) plate.value = formatted;
+    });
+
+    onClose && mount.querySelector('[data-role="close"]')?.addEventListener('click', onClose);
+
+    function showFeedback(text, type = 'error') {
+      feedback.textContent = text;
+      feedback.className = `cce-feedback cce-feedback--${type}`;
+      feedback.hidden = false;
+    }
+
+    function clearFeedback() {
+      feedback.hidden = true;
+    }
+
+    // Persist settings as soon as they change, so the next calculation uses them.
+    const saveSettings = () => writeSettings(currentSettings());
+    years.addEventListener('change', saveSettings);
+    province.addEventListener('change', saveSettings);
+    kmPerYear.addEventListener('change', saveSettings);
+
+    function currentSettings() {
+      return {
+        ownershipYears: Number(years.value) || DEFAULT_SETTINGS.ownershipYears,
+        kmPerYear: parseNumber(kmPerYear.value) || DEFAULT_SETTINGS.kmPerYear,
+        province: province.value || DEFAULT_SETTINGS.province,
+      };
+    }
+
+    async function applySettings(settings = {}) {
+      const merged = { ...DEFAULT_SETTINGS, ...settings };
+      years.value = String(merged.ownershipYears);
+      province.value = merged.province;
+      kmPerYear.value = formatNumber(merged.kmPerYear);
+    }
+
+    mount.querySelector('form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearFeedback();
+
+      const cleanPlate = root.KentekenUtils?.clean(plate.value) || '';
+      if (cleanPlate.length !== 6) {
+        showFeedback('Vul een geldig kenteken in (6 tekens).');
+        plate.focus();
+        return;
+      }
+      if (!root.KentekenUtils?.isValid(cleanPlate)) {
+        showFeedback('Dit is geen geldig Nederlands kenteken.');
+        plate.focus();
+        return;
+      }
+
+      const settings = currentSettings();
+      const payload = {
+        licensePlate: root.KentekenUtils.format(cleanPlate),
+        cleanPlate,
+        mileage: parseNumber(mileage.value),
+        price: parseNumber(price.value),
+        ownershipYears: settings.ownershipYears,
+        kmPerYear: settings.kmPerYear,
+        province: settings.province,
+        carTitle: subtitle.dataset.carTitle || '',
+        timestamp: Date.now(),
+      };
+
+      await saveSettings();
+
+      submit.disabled = true;
+      submitLabel.textContent = 'ANWB openen…';
+
+      try {
+        await launch(payload);
+        if (options.onSubmit && options.onSubmit(payload) === false) return;
+      } finally {
+        submit.disabled = false;
+        submitLabel.textContent = 'Bereken op ANWB.nl';
+      }
+    });
+
+    return {
+      /** Prefill the extracted AutoScout24 values. */
+      setValues({ licensePlate, mileage: km, price: carPrice, title } = {}) {
+        if (licensePlate) plate.value = licensePlate;
+        if (Number.isFinite(km)) mileage.value = formatNumber(km);
+        if (Number.isFinite(carPrice)) price.value = formatNumber(carPrice);
+        this.setTitle(title);
+      },
+
+      setTitle(title) {
+        subtitle.dataset.carTitle = title || '';
+        subtitle.textContent = title || '';
+        subtitle.hidden = !title;
+      },
+
+      async applySettings(settings) {
+        await applySettings(settings);
+      },
+
+      /** True when no kenteken could be extracted from the page. */
+      needsPlate() {
+        return !root.KentekenUtils?.isValid(plate.value);
+      },
+
+      focusPlate() {
+        plate.focus();
+      },
+
+      showFeedback,
+      clearFeedback,
+      element: mount,
+    };
+  }
+
+  return {
+    PROVINCES,
+    OWNERSHIP_YEARS,
+    DEFAULT_SETTINGS,
+    ANWB_URL,
+    formatNumber,
+    parseNumber,
+    attachNumberFormatting,
+    readSettings,
+    writeSettings,
+    launch,
+    render,
+  };
+});
