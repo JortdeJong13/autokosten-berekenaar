@@ -3,30 +3,41 @@
 # Wrap this extension in a real macOS app so Safari installs it permanently,
 # instead of loading it every session via Develop > Add Temporary Extension.
 #
-# Requires full Xcode (not just Command Line Tools), because it uses
-# `safari-web-extension-converter`.
+# Requires full Xcode (not just Command Line Tools), because it uses Apple's
+# converter for Safari web extensions.
 #
 #   ./scripts/make-safari-app.sh
 #
-# Output: safari/Autokosten Berekenaar/ — open the .xcodeproj in it and press Run.
+# Output goes to a SIBLING of this repo (../autokosten-berekenaar-safari), not
+# inside it: the converter scans the extension folder for resources, and
+# writing its output there risks it picking up its own generated files.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="${REPO_ROOT}/safari"
+OUT_DIR="$(cd "${REPO_ROOT}/.." && pwd)/autokosten-berekenaar-safari"
 APP_NAME="Autokosten Berekenaar"
 BUNDLE_ID="nl.jortdejong.autokosten-berekenaar"
 
-# --- Preconditions ----------------------------------------------------------
+# --- Find the converter (Apple renamed it in newer Xcode) -------------------
 
-if ! xcode-select -p 2>/dev/null | grep -q "Xcode.app"; then
-  echo "error: full Xcode is required, but the active developer directory is:" >&2
-  echo >&2
-  echo "    $(xcode-select -p 2>/dev/null || echo '(onbekend)')" >&2
-  echo >&2
-  # Quoted heredoc: keeps the backticks literal rather than running them.
-  cat >&2 <<'MSG'
-`safari-web-extension-converter` ships with Xcode and is not part of the
+CONVERTER=""
+for candidate in safari-web-extension-converter safari-web-extension-packager; do
+  if xcrun --find "${candidate}" >/dev/null 2>&1; then
+    CONVERTER="${candidate}"
+    break
+  fi
+done
+
+if [[ -z "${CONVERTER}" ]]; then
+  if ! xcode-select -p 2>/dev/null | grep -q "Xcode.app"; then
+    echo "error: full Xcode is required, but the active developer directory is:" >&2
+    echo >&2
+    echo "    $(xcode-select -p 2>/dev/null || echo '(onbekend)')" >&2
+    echo >&2
+    # Quoted heredoc: keeps the backticks literal rather than running them.
+    cat >&2 <<'MSG'
+The Safari web extension converter ships with Xcode and is not part of the
 Command Line Tools.
 
   1. Install Xcode from the App Store (or developer.apple.com/download).
@@ -37,12 +48,17 @@ Command Line Tools.
 
   3. Re-run this script.
 MSG
-  exit 1
-fi
+  else
+    cat >&2 <<MSG
+error: Xcode is active, but neither the converter nor the packager was found.
 
-if ! xcrun --find safari-web-extension-converter >/dev/null 2>&1; then
-  echo "error: safari-web-extension-converter not found in the active Xcode." >&2
-  echo "       Try: sudo xcodebuild -runFirstLaunch" >&2
+Tried: safari-web-extension-converter, safari-web-extension-packager
+
+Finish the Xcode first-launch setup, then re-run:
+
+    sudo xcodebuild -runFirstLaunch
+MSG
+  fi
   exit 1
 fi
 
@@ -60,11 +76,14 @@ fi
 # --- Convert ----------------------------------------------------------------
 
 echo "Converting the extension into an Xcode project…"
-echo "  source: ${REPO_ROOT}"
-echo "  output: ${OUT_DIR}"
+echo "  converter: ${CONVERTER}"
+echo "  source:    ${REPO_ROOT}"
+echo "  output:    ${OUT_DIR}"
 echo
 
-xcrun safari-web-extension-converter "${REPO_ROOT}" \
+# Extension files are referenced, not copied (the default), so editing the JS
+# here and rebuilding in Xcode picks the changes up.
+xcrun "${CONVERTER}" "${REPO_ROOT}" \
   --project-location "${OUT_DIR}" \
   --app-name "${APP_NAME}" \
   --bundle-identifier "${BUNDLE_ID}" \
@@ -81,8 +100,8 @@ Done. Next:
 
        open "${OUT_DIR}/${APP_NAME}/${APP_NAME}.xcodeproj"
 
-  2. In Xcode, select the project > Signing & Capabilities, and pick your
-     team (a free Apple ID works for personal use).
+  2. In Xcode: select the project, open Signing & Capabilities, and choose your
+     team under Signing. A free Apple ID works for personal use.
 
   3. Press Run (⌘R). The app launches once and installs the extension.
 
@@ -91,6 +110,9 @@ Done. Next:
 The extension now survives quitting Safari, and you can turn
 "Allow unsigned extensions" back off.
 
-To share it with others you need a paid Apple Developer account (\$99/year)
-to sign and notarise the app.
+Note: the project references this repo's files rather than copying them, so if
+you move or rename ${REPO_ROOT}, delete the project and re-run this script.
+
+To share the app with others you need a paid Apple Developer account
+(\$99/year) to sign and notarise it.
 MSG

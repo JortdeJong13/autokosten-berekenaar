@@ -70,7 +70,7 @@ Je hebt daar **volledige Xcode** voor nodig (niet alleen de Command Line Tools),
 
 4. Zet de extensie aan in **Safari › Instellingen › Extensies**.
 
-De map `safari/` staat in `.gitignore`, want het project bevat je persoonlijke signing-instellingen.
+Het Xcode-project komt **naast** deze repo te staan (in `../autokosten-berekenaar-safari`), niet erin. Dat is bewust: de converter scant de extensiemap op bestanden, en zijn eigen uitvoer daarin schrijven kan verwarring geven. Het project verwijst naar de bestanden in deze repo in plaats van ze te kopiëren, dus je kunt blijven doorwerken in deze map en daarna in Xcode opnieuw bouwen.
 
 > **Verspreiden naar anderen** is een grotere stap: dan heb je een betaald Apple Developer-account nodig ($99 per jaar) om de app te ondertekenen en te notariseren. Zonder dat kunnen anderen de app niet zonder waarschuwing installeren.
 
