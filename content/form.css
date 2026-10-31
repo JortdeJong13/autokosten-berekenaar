@@ -69,6 +69,12 @@
   min-width: 0;
 }
 
+/* The plate field is hidden once the car is identified, so the flex display
+   above must not override [hidden]. */
+.cce-field[hidden] {
+  display: none;
+}
+
 .cce-label {
   font-size: 11px;
   font-weight: 600;

@@ -210,7 +210,7 @@
       <p class="cce-subtitle" data-role="subtitle"></p>
 
       <form class="cce-form" novalidate>
-        <div class="cce-field">
+        <div class="cce-field" data-role="plate-field">
           <label class="cce-label" for="cce-plate" data-role="plate-label">Kenteken</label>
           <div class="cce-plate">
             <span class="cce-plate-nl">NL</span>
@@ -312,17 +312,19 @@
     }
 
     /**
-     * With the car's make and model known, ANWB can be driven without a plate.
-     * Mark the field optional so it does not read as a required field the user
-     * has to go and find — the fallback handles it.
+     * With the car's make and model known, ANWB is driven entirely by the
+     * make/model route, so the plate field is not just optional — it is unused.
+     * Hide it rather than leave a control on screen that does nothing.
      */
     function updatePlateHint() {
-      const label = mount.querySelector('[data-role="plate-label"]');
-      if (label) label.textContent = hasVehicleDetails() ? 'Kenteken (optioneel)' : 'Kenteken';
+      const field = mount.querySelector('[data-role="plate-field"]');
+      if (!field) return;
 
-      // A "fill in a kenteken" complaint is obsolete once we know the car, so
-      // drop it rather than leaving a stale warning on screen.
-      if (hasVehicleDetails()) clearFeedback();
+      const known = hasVehicleDetails();
+      field.hidden = known;
+
+      // A "fill in a kenteken" complaint is obsolete once we know the car.
+      if (known) clearFeedback();
     }
 
     // Persist settings as soon as they change, so the next calculation uses them.

@@ -48,6 +48,9 @@
   let settings = { ...DEFAULT_SETTINGS };
   // True when the listing had no plate and we are describing the car instead.
   let useMerkModel = false;
+  // True when the listing gave enough detail to describe the car, so we can
+  // fall back if ANWB cannot find the plate.
+  let vehicleFallbackReady = false;
   // Option labels the automation ticked, reported with the result.
   let tickedOptions = [];
   let running = false;
@@ -63,6 +66,13 @@
 
   const screen = {
     isKenteken: () => hasField('input[name="licensePlate"]'),
+    // ANWB answers a plate it cannot find with a 404 and this message. It can
+    // happen even for a plate that looks valid, e.g. a car not yet in the RDW
+    // register, and ANWB itself suggests the make/model route in that case.
+    hasKentekenError: () =>
+      Array.from(document.querySelectorAll('[role="alert"], [class*="error" i], p, span, div')).some((el) =>
+        /niet gelukt om de autogegevens|autogegevens ophalen mislukt/i.test(el.textContent || '')
+      ),
     // The make/model branch, used only when a listing has no licence plate.
     // It grows in stages: Merk -> Model -> Bouwjaar -> Bouwmaand -> [extra].
     isMerkModel: () => hasField('select[name="brand"]') || hasField('select[name="model"]'),
@@ -221,7 +231,13 @@
       guard();
     }
 
-    await advance(/volgende stap/i, () => !screen.isKenteken() || screen.isAanschaf(), { step: 35 });
+    // Stop on the lookup error too, otherwise a 404 leaves this retrying until
+    // the timeout instead of handing over to the make/model fallback.
+    await advance(
+      /volgende stap/i,
+      () => !screen.isKenteken() || screen.isAanschaf() || screen.hasKentekenError(),
+      { step: 35 }
+    );
     filled.delete('kenteken');
   }
 
@@ -652,13 +668,27 @@
         }
 
         if (screen.isKenteken()) {
-          // No plate on the listing: switch ANWB to its make/model tab first.
-          if (useMerkModel && !filled.has('tab-switched')) {
+          // Switch to the make/model tab when there is no plate at all, or when
+          // ANWB could not find the one we gave it.
+          const lookupFailed = screen.hasKentekenError();
+
+          if (lookupFailed && !vehicleFallbackReady) {
+            setStatus('Kenteken niet gevonden bij ANWB.', { error: true });
+            return;
+          }
+
+          if ((useMerkModel || lookupFailed) && !filled.has('tab-switched')) {
+            if (lookupFailed && !useMerkModel) {
+              console.log('[AutokostenBerekenaar] Kenteken niet gevonden; terugval op merk/model.');
+              setStatus('Kenteken niet gevonden — verder op merk en model…', { step: 10 });
+            }
+            useMerkModel = true;
             await switchToMerkModelTab();
             filled.add('tab-switched');
             idlePasses = 0;
             continue;
           }
+
           await doKenteken(pendingData, filled);
           idlePasses = 0;
           continue;
@@ -715,20 +745,21 @@
       return;
     }
 
-    // No usable plate: fall back to ANWB's make/model form, but only when the
-    // listing gave us enough to identify the car.
+    // buildVehiclePayload derives year/month from productionDate, so use its
+    // result rather than the raw extracted shape (which only carries
+    // productionDate). Reading the raw shape left year undefined.
+    const vehicle = VehicleUtils?.buildVehiclePayload(pendingData.vehicle || {});
+    if (vehicle) pendingData.vehicle = vehicle;
+    vehicleFallbackReady = Boolean(vehicle);
+
+    // No usable plate: go straight to the make/model form.
     if (!Kenteken?.isValid(pendingData.licensePlate)) {
-      const vehicle = VehicleUtils?.buildVehiclePayload(pendingData.vehicle || {});
-      if (!vehicle) {
+      if (!vehicleFallbackReady) {
         console.warn(
           '[AutokostenBerekenaar] Geen kenteken en te weinig voertuiggegevens, automatisering overgeslagen.'
         );
         return;
       }
-      // buildVehiclePayload derives year/month from productionDate, so use its
-      // result rather than the raw extracted shape (which only has
-      // productionDate). Reading the raw shape silently left year undefined.
-      pendingData.vehicle = vehicle;
       useMerkModel = true;
       console.log('[AutokostenBerekenaar] Geen kenteken — merk/model-fallback met:', vehicle);
     }

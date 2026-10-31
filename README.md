@@ -20,13 +20,17 @@ Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilo
 
 4. **Doorloopt de ANWB-rekentool.** De extensie vult het kenteken in, kiest de standaarduitvoering, zet de aanschafdatum op de huidige maand, en vult kilometerstand, aanschafprijs en jouw uitgangspunten in. Daarna word je doorgestuurd naar het resultaat met de maandelijkse kosten.
 
-5. **Terugvaloptie op merk en model.** Staat er geen kenteken in de advertentie, dan schakelt de extensie over op ANWB's tabblad "Zoek op merk en model" en beschrijft de auto aan de hand van de advertentiegegevens: merk, model, bouwjaar, bouwmaand en — als ANWB daarom vraagt — brandstof.
+5. **Terugvaloptie op merk en model.** Staat er geen kenteken in de advertentie, of **herkent ANWB het kenteken niet**, dan schakelt de extensie over op ANWB's tabblad "Zoek op merk en model" en beschrijft de auto aan de hand van de advertentiegegevens: merk, model, bouwjaar, bouwmaand en — als ANWB daarom vraagt — brandstof.
+
+   Die tweede situatie komt voor bij auto's die nog niet in het RDW-register staan, bijvoorbeeld een verse import. ANWB antwoordt dan met een 404 en de melding *"Autogegevens ophalen mislukt"*. Zodra de extensie die melding ziet en de advertentie genoeg gegevens bevat, gaat ze automatisch verder op merk en model. Is er geen kenteken én te weinig advertentiegegevens, dan stopt ze met een duidelijke melding.
 
    De gegevens komen uit het JSON-LD `Car`-blok van de advertentie, dat structuur biedt in plaats van opmaak die kan veranderen. Alleen de brandstofsoort staat daar niet in; die komt uit `__NEXT_DATA__`.
 
    > **Let op:** AutoScout24 en ANWB noemen modellen niet hetzelfde. AutoScout24 zegt "GLC 300" waar ANWB "Glc-Klasse" heeft, en "318I" waar ANWB alleen "3-Serie" kent. Een verkeerde koppeling levert een plausibel maar onjuist bedrag op, dus bij een onzekere match meldt de statusbalk welke keuze is gemaakt, zodat je het kunt controleren. Lukt koppelen helemaal niet, dan stopt de automatisering met een duidelijke melding in plaats van te gokken.
 
-6. **Opties.** Op de merk/model-route vraagt ANWB welke opties op de auto zitten; die beïnvloeden de restwaarde. De extensie vinkt aan waarvoor de advertentie bewijs levert.
+6. **Schone bediening.** Zodra de auto bekend is, wordt het kentekenveld verborgen: het doet op de merk/model-route niets meer, en een leeg veld dat er verplicht uitziet is alleen maar verwarrend. Alleen kilometerstand en aanschafprijs blijven staan.
+
+7. **Opties.** Op de merk/model-route vraagt ANWB welke opties op de auto zitten; die beïnvloeden de restwaarde. De extensie vinkt aan waarvoor de advertentie bewijs levert.
 
    Dat gebeurt bewust **niet** met een lijst per merk of model. Zo'n lijst zou verouderen zodra een van beide sites iets verandert, en de optielijst verschilt per auto. In plaats daarvan wordt de tekst van ANWB aan een **concept** gekoppeld, en dat concept wordt beantwoord met feiten over de advertentie:
 

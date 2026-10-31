@@ -140,9 +140,12 @@ console.log('popup/popup.html');
     window.__form.setVehicleDetails({ brand: 'Mercedes-Benz', model: 'GLC 300' });
   });
   await page.waitForTimeout(100);
-  const label = await page.textContent('[data-role="plate-label"]');
-  check('vehicle details make the plate optional',
-    /optioneel/i.test(label || ''), `label was "${label}"`);
+  const plateField = await page.evaluate(() => {
+    const f = document.querySelector('[data-role="plate-field"]');
+    return { hidden: f ? f.hidden : null, visible: f ? f.getBoundingClientRect().width > 0 : null };
+  });
+  check('the plate field is hidden once the car is known',
+    plateField.hidden === true && plateField.visible === false, JSON.stringify(plateField));
   // The panel should stay quiet: no notice about a missing plate.
   const quiet = await page.evaluate(() => {
     const f = document.querySelector('[data-role="feedback"]');
