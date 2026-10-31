@@ -424,6 +424,12 @@
         if (!el || el.disabled || el.options.length < 2) return null;
         return resolveFuelOption(vehicle, el);
       })(),
+      // A disabled transmission select holds ANWB's own answer, so leave it be.
+      transmission: (() => {
+        const el = field('select[name="transmission"]');
+        if (!el || el.disabled || el.options.length < 2) return null;
+        return V.mapTransmission(vehicle.transmission);
+      })(),
     };
   }
 
@@ -507,6 +513,8 @@
     }
 
     // --- Fuel, present only for cars ANWB cannot infer it for ---
+    // Fuel comes first: for some cars the transmission select only becomes
+    // enabled once a fuel is chosen, so answering it earlier finds it disabled.
     if (!filled.has('fuel')) {
       const fuelSelect = field('select[name="fuel"]');
       // A disabled fuel select means ANWB filled it from the configuration, and
@@ -523,6 +531,27 @@
           console.warn('[AutokostenBerekenaar] Geen brandstofkoppeling voor:', vehicle.fuel);
         }
         filled.add('fuel');
+      }
+    }
+
+    // --- Soort transmissie, for cars where ANWB does not know it ---
+    // ANWB disables this select and fills in "Automaat" when the model only
+    // came with one gearbox. When it is a real choice, an empty value is a
+    // hard validation error ("Selecteer een transmissie"), so every manual
+    // car on this route used to fail. It renders after fuel, so it is asked
+    // for last.
+    if (!filled.has('transmission')) {
+      const transmissionSelect = field('select[name="transmission"]');
+      if (transmissionSelect && !transmissionSelect.disabled && transmissionSelect.options.length > 1) {
+        const transmission = V.mapTransmission(vehicle.transmission);
+
+        if (transmission) {
+          await setSelectAndVerify('transmission', transmission, { timeout: 10000, attempts: 3 });
+          setStatus(`Transmissie gekozen: ${transmission}`, { step: 41 });
+        } else {
+          console.warn('[AutokostenBerekenaar] Geen transmissiekoppeling voor:', vehicle.transmission);
+        }
+        filled.add('transmission');
       }
     }
 
@@ -849,18 +878,7 @@
   // Bootstrap
   // ---------------------------------------------------------------------------
 
-  if (chrome?.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-      if (request.action === 'stopAutomation') {
-        stopped = true;
-        sendResponse({ success: true });
-      }
-      if (request.action === 'getAutomationStatus') {
-        sendResponse({ running, hasPending: Boolean(pendingData) });
-      }
-      return true;
-    });
-  }
+  // The banner's Stop button sets `stopped` directly; no message is involved.
 
   async function init() {
     if (!chrome?.storage?.local) return;

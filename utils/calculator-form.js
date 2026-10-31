@@ -124,6 +124,7 @@
       }
     };
 
+    // No storage at all: nothing to hand over to the ANWB page, so just open it.
     if (!root.chrome?.storage?.local) {
       openTabDirectly();
       return Promise.resolve();
@@ -131,14 +132,9 @@
 
     const storeThenOpen = () => new Promise((resolve) => {
       root.chrome.storage.local.set({ pendingCalculation: payload }, () => {
-        // The popup (and any context with tab access) opens the tab itself.
-        if (root.chrome?.tabs?.create) {
-          openTabDirectly();
-          resolve();
-          return;
-        }
-
-        if (!root.chrome?.runtime?.sendMessage) {
+        // The popup (and any context with tab access) opens the tab itself;
+        // so does a context without messaging, rather than open nothing.
+        if (root.chrome?.tabs?.create || !root.chrome?.runtime?.sendMessage) {
           openTabDirectly();
           resolve();
           return;
@@ -322,13 +318,16 @@
     }
 
     /**
-     * With the car's make and model known, ANWB is driven entirely by the
-     * make/model route, so the plate field is not just optional — it is unused.
-     * Hide it rather than leave a control on screen that does nothing.
+     * Re-run the visibility rules, and with them drop any complaint that has
+     * become obsolete. With the car's make and model known, ANWB is driven
+     * entirely by the make/model route, so the plate field is not just
+     * optional — it is unused, and hiding it is the point.
      */
     function updatePlateHint() {
       updateFieldVisibility();
-      // A "fill in a kenteken" complaint is obsolete once we know the car.
+      // A "fill in a kenteken" complaint is obsolete once we know the car. Do
+      // not clear the other way round: that would erase the confirmation the
+      // popup shows on page load, which happens before any listing data is set.
       if (hasVehicleDetails() || fromListing.mileage || fromListing.price) clearFeedback();
     }
 
@@ -353,7 +352,6 @@
 
       // Collapse the row entirely when both of its fields are gone, otherwise
       // it leaves an empty gap above the settings.
-      // Collapse the whole km/price row when both came from the listing.
       const bothHidden = fromListing.mileage && fromListing.price;
       setHidden('kmprice-row', bothHidden);
     }

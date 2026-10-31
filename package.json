@@ -1,13 +1,13 @@
 {
   "name": "autokosten-berekenaar",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Safari Web Extension linking AutoScout24.nl occasions to ANWB Autokosten Calculator",
   "main": "background.js",
   "scripts": {
     "test": "npm run test:unit && npm run test:ui && npm run test:e2e",
     "test:unit": "node test/test_kenteken.js && node test/test_extraction.js && node test/test_dom_utils.js && node test/test_vehicle.js && node test/test_options.js && node test/test_manifest.js",
     "test:ui": "node test/test_ui.mjs && node test/test_no_plate_flow.mjs && node test/test_extraction_ev.mjs",
-    "test:e2e": "node test/test_anwb_e2e.mjs && node test/test_merk_model_e2e.mjs && node test/test_kenteken_fallback_e2e.mjs && node test/test_ev_e2e.mjs",
+    "test:e2e": "node test/test_anwb_e2e.mjs && node test/test_merk_model_e2e.mjs && node test/test_kenteken_fallback_e2e.mjs && node test/test_ev_e2e.mjs && node test/test_transmission_e2e.mjs",
     "generate-icons": "node scripts/generate-icons.js",
     "app:safari": "./scripts/make-safari-app.sh",
     "build:safari": "./scripts/sync-to-safari.sh"

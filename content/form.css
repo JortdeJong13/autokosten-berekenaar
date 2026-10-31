@@ -62,6 +62,12 @@
   gap: 10px;
 }
 
+/* `display: grid` outranks the user agent's `[hidden] { display: none }`, so a
+   "collapsed" row still took up a row's height and left a gap. */
+.cce-row[hidden] {
+  display: none;
+}
+
 .cce-field {
   display: flex;
   flex-direction: column;

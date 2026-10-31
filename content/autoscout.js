@@ -376,7 +376,6 @@
       }
     }
 
-    console.log('[AutokostenBerekenaar] Extracted details on-demand:', { title, price, mileage, licensePlate });
     const vehicle = extractVehicleDetails();
 
     console.log('[AutokostenBerekenaar] Uitgelezen:', { title, price, mileage, licensePlate, vehicle });
@@ -459,15 +458,9 @@
       card.hidden = false;
       triggerBtn.setAttribute('aria-expanded', 'true');
 
-      // A missing kenteken is the one thing the user must supply themselves.
-      if (!details.licensePlate) {
-        // Nothing to say: the make/model fallback covers this, and a notice
-        // here would just be noise. The field stays available if the user
-        // knows the plate and would rather type it.
-        form.clearFeedback();
-      } else {
-        form.clearFeedback();
-      }
+      // Nothing to say either way: the make/model fallback covers a missing
+      // plate, and a notice here would just be noise.
+      form.clearFeedback();
     });
 
     // Close when clicking elsewhere on the page.

@@ -20,7 +20,7 @@ Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilo
 
 4. **Doorloopt de ANWB-rekentool.** De extensie vult het kenteken in, kiest de standaarduitvoering, zet de aanschafdatum op de huidige maand, en vult kilometerstand, aanschafprijs en jouw uitgangspunten in. Daarna word je doorgestuurd naar het resultaat met de maandelijkse kosten.
 
-5. **Terugvaloptie op merk en model.** Staat er geen kenteken in de advertentie, of **herkent ANWB het kenteken niet**, dan schakelt de extensie over op ANWB's tabblad "Zoek op merk en model" en beschrijft de auto aan de hand van de advertentiegegevens: merk, model, bouwjaar, bouwmaand en — als ANWB daarom vraagt — brandstof.
+5. **Terugvaloptie op merk en model.** Staat er geen kenteken in de advertentie, of **herkent ANWB het kenteken niet**, dan schakelt de extensie over op ANWB's tabblad "Zoek op merk en model" en beschrijft de auto aan de hand van de advertentiegegevens: merk, model, bouwjaar, bouwmaand en — als ANWB daarom vraagt — brandstof en transmissie.
 
    Die tweede situatie komt voor bij auto's die nog niet in het RDW-register staan, bijvoorbeeld een verse import. ANWB antwoordt dan met een 404 en de melding *"Autogegevens ophalen mislukt"*. Zodra de extensie die melding ziet en de advertentie genoeg gegevens bevat, gaat ze automatisch verder op merk en model. Is er geen kenteken én te weinig advertentiegegevens, dan stopt ze met een duidelijke melding.
 
@@ -28,7 +28,7 @@ Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilo
 
    > **Let op:** AutoScout24 en ANWB noemen modellen niet hetzelfde. AutoScout24 zegt "GLC 300" waar ANWB "Glc-Klasse" heeft, en "318I" waar ANWB alleen "3-Serie" kent. Een verkeerde koppeling levert een plausibel maar onjuist bedrag op, dus bij een onzekere match meldt de statusbalk welke keuze is gemaakt, zodat je het kunt controleren. Lukt koppelen helemaal niet, dan stopt de automatisering met een duidelijke melding in plaats van te gokken.
 
-6. **Schone bediening.** Zodra de auto bekend is, wordt het kentekenveld verborgen: het doet op de merk/model-route niets meer, en een leeg veld dat er verplicht uitziet is alleen maar verwarrend. Alleen kilometerstand en aanschafprijs blijven staan.
+6. **Schone bediening.** Elk veld dat de advertentie al beantwoordt, wordt verborgen: het kenteken zodra de auto bekend is (op de merk/model-route doet het niets meer), en kilometerstand en aanschafprijs zodra ze zijn uitgelezen. Wat de advertentie niet bevat, blijft staan zodat je het met de hand kunt invullen.
 
 7. **Opties.** Op de merk/model-route vraagt ANWB welke opties op de auto zitten; die beïnvloeden de restwaarde. De extensie vinkt aan waarvoor de advertentie bewijs levert.
 
@@ -127,7 +127,7 @@ Daarna moet Safari volledig afsluiten (**⌘Q** — het sluiten van het venster 
 3. Controleer de uitgelezen gegevens en pas zo nodig de uitgangspunten aan.
 4. Klik op **Bereken op ANWB.nl**. Er opent een nieuw tabblad waarin de rekentool automatisch wordt doorlopen.
 
-Staat het kenteken niet in de advertentie? Dan gaat het formulier gewoon door en zoekt ANWB de auto op **merk en model**. Het kentekenveld blijft staan (met de aanduiding *optioneel*) voor het geval je het alsnog wilt intypen, maar je hoeft er niets mee.
+Staat het kenteken niet in de advertentie? Dan gaat het formulier gewoon door en zoekt ANWB de auto op **merk en model**. Het kentekenveld verdwijnt in dat geval: de auto is immers al bekend, dus je hoeft niets meer in te typen.
 
 ## Hoe het werkt
 
@@ -150,13 +150,22 @@ popup/                 Werkbalk-popup (rendert hetzelfde formulier)
 scripts/
   generate-icons.js    Genereert de PNG-iconen
   make-safari-app.sh   Zet de extensie om naar een echte macOS-app
+  sync-to-safari.sh    Kopieert wijzigingen naar het Xcode-project en bouwt opnieuw
+  fix-safari-project-signing.sh  Zet het ondertekeningsteam in het Xcode-project
+test/                  Unit-, UI- en live end-to-end tests
 ```
+
+> De twee oppervlakken delen niet alleen het formulier maar ook de opslag: de
+> popup en de zwevende knop lezen en schrijven allebei `settings` en
+> `pendingCalculation` in `chrome.storage.local`. Welk van de twee je opent,
+> maakt voor het resultaat dus niet uit.
 
 Een paar keuzes die het gedrag van de ANWB-tool verklaren, allemaal tegen de echte site geverifieerd:
 
 - **React-bewaarde invoervelden.** De rekentool gebruikt React Hook Form. Alleen `.value` zetten en een `change`-event sturen is niet genoeg; de interne value tracker van React moet ook bijgewerkt worden. Dat regelt `setInputValue`.
 - **De eerste klik wordt altijd afgewezen.** React Hook Form weigert een submit die binnenkomt terwijl het formulier nog aan het settelen is, ook als het veld al een geldige waarde heeft. Opnieuw klikken *zonder opnieuw te typen* lukt wel. Daarom vult de automatisering elk veld één keer en klikt daarna bij elke ronde opnieuw.
 - **Velden verschijnen in golven.** Bezitsduur, kilometers per jaar en provincie bestaan pas in de DOM nadat jaar, maand, prijs en kilometerstand geldig zijn. De automatisering wacht daarom per veld tot het bestaat.
+- **Niet elk veld is altijd een keuze.** ANWB vult "Soort transmissie" zelf in en zet het veld op slot als een model maar één versnellingsbak had. Is het veld wél actief, dan weigert ANWB de stap zonder antwoord (*"Selecteer een transmissie"*). De automatisering vult het daarom alleen als het echt gevraagd wordt, met de transmissie uit de advertentie.
 - **De automatisering is een lus, geen vaste volgorde.** Ze kijkt welk scherm zichtbaar is en rondt dat af, zodat ze herstelt als ANWB een scherm overslaat (bijvoorbeeld als er maar één uitvoering is) of van volgorde verandert.
 
 ## Privacy
@@ -183,7 +192,9 @@ De UI- en end-to-end tests draaien in **WebKit**, de engine van Safari, via Play
 
 De UI-tests laden de **echte** bestanden uit deze repo, niet een kopie. Ze controleren onder andere dat het manifest elk script laadt dat de code nodig heeft, dat alle formuliervelden even hoog zijn, en dat het openen van een tab goed gaat in alle drie de contexten (popup, content script, en een background die niet reageert).
 
-De end-to-end test heeft netwerktoegang nodig en raakt de echte ANWB-site. Die is niet geschikt voor CI.
+`test/test_extraction_ev.mjs` draait tegen een bewaarde advertentiepagina. Ontbreekt die fixture, dan slaat de test zichzelf over; de instructie om hem opnieuw op te slaan staat bovenaan het bestand.
+
+De end-to-end tests hebben netwerktoegang nodig en raken de echte ANWB-site. Ze zijn daarom niet geschikt voor CI. Er zijn er vijf: met kenteken, merk/model, een kenteken dat ANWB niet kent, een elektrische auto, en een auto met handgeschakelde transmissie.
 
 > De kenteken-lookup van ANWB geeft met enige regelmaat een serverfout (504). De automatisering probeert het dan opnieuw, waardoor een berekening soms wat langer duurt.
 

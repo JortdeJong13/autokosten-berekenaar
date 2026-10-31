@@ -29,18 +29,9 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       });
       return true; // keep the channel open for the async response
 
-    case 'getPendingCalculation':
-      chrome.storage.local.get(['pendingCalculation'], (result) => {
-        sendResponse({ data: result.pendingCalculation ?? null });
-      });
-      return true;
-
-    case 'clearPendingCalculation':
-      chrome.storage.local.remove(['pendingCalculation'], () => {
-        sendResponse({ success: true });
-      });
-      return true;
-
+    // That is the only message the extension sends. The readers of the pending
+    // payload (the ANWB content script) and the writer of results live in the
+    // pages themselves, so there is no get/clear counterpart here.
     default:
       return false;
   }

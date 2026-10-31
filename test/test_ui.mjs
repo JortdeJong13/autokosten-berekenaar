@@ -210,6 +210,16 @@ console.log('popup/popup.html');
     visibility.plate === false && visibility.mileage === false && visibility.price === false,
     JSON.stringify(visibility));
 
+  // Hiding the two fields leaves the row itself behind unless it is collapsed.
+  // `display: grid` beats the user agent's `[hidden] { display: none }`, so
+  // without an explicit rule it kept its height and left a gap.
+  const row = await page.evaluate(() => {
+    const el = document.querySelector('[data-role="kmprice-row"]');
+    return { hidden: el.hidden, height: Math.round(el.getBoundingClientRect().height) };
+  });
+  check('the emptied km/price row takes up no space', row.hidden === true && row.height === 0,
+    JSON.stringify(row));
+
   await context.close();
 }
 
