@@ -92,6 +92,20 @@
   box-sizing: border-box;
 }
 
+/* WebKit ignores author padding on a natively-styled <select>, which made the
+   dropdowns 11px shorter than the text inputs. Dropping the native appearance
+   lets padding apply, so both land on the same height; the chevron is drawn
+   back in below. */
+.cce-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23475569' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  padding-right: 28px;
+}
+
 /* Values read as figures, so align them on the digit. */
 .cce-input {
   font-variant-numeric: tabular-nums;

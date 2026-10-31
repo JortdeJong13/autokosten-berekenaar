@@ -101,6 +101,22 @@ console.log('popup/popup.html');
     saved?.ownershipYears === 5 && saved?.kmPerYear === 15000 && saved?.province === 'Utrecht',
     JSON.stringify(saved));
 
+  // WebKit ignores padding on natively-styled selects, which used to leave the
+  // dropdowns visibly shorter than the text inputs beside them.
+  const heights = await page.evaluate(() => {
+    const h = (role) => Math.round(document.querySelector(`[data-role="${role}"]`).getBoundingClientRect().height);
+    return {
+      years: h('years'), kmPerYear: h('kmPerYear'), province: h('province'),
+      mileage: h('mileage'), price: h('price'),
+      selectAppearance: getComputedStyle(document.querySelector('[data-role="years"]')).webkitAppearance,
+    };
+  });
+  const all = [heights.years, heights.kmPerYear, heights.province, heights.mileage, heights.price];
+  check('all form controls share one height', new Set(all).size === 1,
+    `heights were ${JSON.stringify(heights)}`);
+  check('selects do not use the native appearance', heights.selectAppearance === 'none',
+    `appearance was "${heights.selectAppearance}"`);
+
   // Invalid kenteken is rejected with a message.
   await page.fill('[data-role="plate"]', 'ABC');
   await page.click('[data-role="submit"]');
