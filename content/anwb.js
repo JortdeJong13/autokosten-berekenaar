@@ -36,8 +36,11 @@
   };
 
   const CALC_URL = 'https://www.anwb.nl/auto/autokosten/berekenen';
+  // How long to wait after a submit before assuming it was rejected and
+  // clicking again. ANWB's vehicle lookup answers in ~300-600ms, so this
+  // comfortably covers it while still recovering quickly when it is slower.
+  const CLICK_RETRY_MS = 1500;
   const MAX_CLICKS_PER_STEP = 4;
-  const STEP_SETTLE_MS = 15000;
 
   let pendingData = null;
   let settings = { ...DEFAULT_SETTINGS };
@@ -137,26 +140,51 @@
 
   /**
    * Click `label` and wait for `isDone()` to become true, re-clicking without
-   * re-filling in between (see file header). Returns once the screen changed.
+   * re-filling in between.
+   *
+   * Why the re-clicking: ANWB's submit handler looks up the car via an API call,
+   * and a submit that arrives before that response lands is rejected with a
+   * generic "velden niet of onjuist ingevuld" error — even though the value is
+   * perfectly valid. The gate is the network, not the form.
+   *
+   * Measured against the live site: the lookup takes 282-600ms, and its latency
+   * varies run to run. So a single click after a fixed wait is unreliable in
+   * both directions — waiting 300ms failed every time, while 800ms succeeded,
+   * purely because the API happened to answer inside that window.
+   *
+   * So rather than guess a delay, this clicks and then polls in short slices,
+   * clicking again if the screen hasn't moved. That is typically one click, and
+   * it never advances until the response has actually landed.
    */
   async function advance(label, isDone, { step }) {
+    let lastError = null;
+
     for (let attempt = 1; attempt <= MAX_CLICKS_PER_STEP; attempt++) {
       guard();
 
       const clicked = DOM.clickButton(label);
       if (!clicked) throw new Error(`Knop "${label}" niet gevonden`);
 
+      // Short slices so a re-click happens promptly when the API is slow, while
+      // still giving the request room to finish before we click again.
       try {
-        await waitFor(isDone, { timeout: STEP_SETTLE_MS / MAX_CLICKS_PER_STEP, guard });
+        await waitFor(isDone, { timeout: CLICK_RETRY_MS, interval: 60, guard });
         return;
       } catch (err) {
         if (err instanceof AbortedError) throw err;
-        // Form wasn't ready for that submit — the next pass clicks again.
+        lastError = err;
+        // Not advanced yet. The next pass clicks again; the first click's
+        // request is usually still in flight and about to be accepted.
       }
     }
 
-    // Give it one final, longer chance before declaring failure.
-    await waitFor(isDone, { timeout: 10000, guard });
+    // Final, longer chance before declaring failure.
+    try {
+      await waitFor(isDone, { timeout: 10000, guard });
+    } catch (err) {
+      if (err instanceof AbortedError) throw err;
+      throw lastError || err;
+    }
   }
 
   function guard() {
