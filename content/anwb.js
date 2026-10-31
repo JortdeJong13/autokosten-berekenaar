@@ -386,7 +386,7 @@
         setStatus('Gestopt.');
         return;
       }
-      console.error('[CarCostExtension] Automatisering mislukt:', err);
+      console.error('[AutokostenBerekenaar] Automatisering mislukt:', err);
       setStatus(`Automatiseren mislukt: ${err.message}`, { error: true });
     } finally {
       running = false;
@@ -426,7 +426,7 @@
     }
 
     if (!Kenteken?.isValid(pendingData.licensePlate)) {
-      console.warn('[CarCostExtension] Ongeldig kenteken, automatisering overgeslagen:', pendingData.licensePlate);
+      console.warn('[AutokostenBerekenaar] Ongeldig kenteken, automatisering overgeslagen:', pendingData.licensePlate);
       return;
     }
 

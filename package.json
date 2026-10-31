@@ -1,5 +1,5 @@
 {
-  "name": "car-cost-extension",
+  "name": "autokosten-berekenaar",
   "version": "1.0.0",
   "description": "Safari Web Extension linking AutoScout24.nl occasions to ANWB Autokosten Calculator",
   "main": "background.js",

@@ -48,7 +48,7 @@ async function extractFromActiveTab() {
   try {
     [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   } catch (err) {
-    console.warn('[CarCostExtension] tabs.query failed:', err);
+    console.warn('[AutokostenBerekenaar] tabs.query failed:', err);
     return null;
   }
 
@@ -57,7 +57,7 @@ async function extractFromActiveTab() {
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(tab.id, { action: 'extractCarDetails' }, (response) => {
       if (chrome.runtime.lastError || !response?.data) {
-        console.log('[CarCostExtension] Content script unreachable:', chrome.runtime.lastError?.message);
+        console.log('[AutokostenBerekenaar] Content script unreachable:', chrome.runtime.lastError?.message);
         resolve({ title: tab.title || 'AutoScout24 Occasion' });
         return;
       }

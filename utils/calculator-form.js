@@ -150,7 +150,7 @@
           if (settled) return;
           settled = true;
           if (!opened) {
-            console.warn('[CarCostExtension] Background gaf geen antwoord, tab zelf openen.');
+            console.warn('[AutokostenBerekenaar] Background gaf geen antwoord, tab zelf openen.');
             openTabDirectly();
           }
           resolve();
@@ -163,7 +163,7 @@
           root.chrome.runtime.sendMessage({ action: 'startCalculation', data: payload }, (response) => {
             clearTimeout(timer);
             if (root.chrome.runtime.lastError) {
-              console.warn('[CarCostExtension] sendMessage fout:', root.chrome.runtime.lastError.message);
+              console.warn('[AutokostenBerekenaar] sendMessage fout:', root.chrome.runtime.lastError.message);
               settle(false);
             } else {
               settle(Boolean(response?.success));
@@ -171,7 +171,7 @@
           });
         } catch (err) {
           clearTimeout(timer);
-          console.warn('[CarCostExtension] sendMessage mislukt:', err);
+          console.warn('[AutokostenBerekenaar] sendMessage mislukt:', err);
           settle(false);
         }
       });

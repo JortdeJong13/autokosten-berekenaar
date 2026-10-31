@@ -13,7 +13,7 @@
   if (window.__carCostExtensionLoaded) return;
   window.__carCostExtensionLoaded = true;
 
-  console.log('[CarCostExtension] AutoScout24 lightweight script ready');
+  console.log('[AutokostenBerekenaar] AutoScout24 lightweight script ready');
 
   /**
    * Price Extractor
@@ -195,7 +195,7 @@
       }
     }
 
-    console.log('[CarCostExtension] Extracted details on-demand:', { title, price, mileage, licensePlate });
+    console.log('[AutokostenBerekenaar] Extracted details on-demand:', { title, price, mileage, licensePlate });
     return { title, price, mileage, licensePlate };
   }
 

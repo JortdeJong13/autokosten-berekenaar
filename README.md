@@ -1,107 +1,122 @@
-# AutoScout24 naar ANWB Autokosten (Safari Web Extension)
+# Autokosten Berekenaar
 
-Een Safari Web Extension die automatisch occasions op **AutoScout24.nl** uitleest (kenteken, kilometerstand en vraagprijs) en doorstuurt naar de **ANWB Autokosten Calculator** (`anwb.nl/auto/autokosten/berekenen`) om direct de reële maandelijkse autokosten te berekenen.
+Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilometerstand en vraagprijs) en automatisch de **ANWB Autokosten Calculator** invult, zodat je in één klik de werkelijke maandlasten van een auto ziet.
 
----
+<p align="center">
+  <img src="docs/floating-panel.png" alt="De extensie op een AutoScout24-advertentiepagina" width="620">
+</p>
 
-## Functionaliteiten
-
-1. **Automatische data-extractie op AutoScout24.nl:**
-   - **Kenteken:** herkent Nederlandse RDW-sidecodes (1 t/m 14) via `__NEXT_DATA__`, JSON-LD, specificatietabellen en advertentietekst.
-   - **Kilometerstand** en **vraagprijs:** uitgelezen en omgezet naar een getal. De prijs wordt bewust *inclusief* BTW gekozen (ex-BTW- en doorgestreepte prijzen worden genegeerd).
-
-2. **Twee identieke ingangen naar dezelfde calculator:**
-   - De **zwevende knop** rechtsonder op een advertentiepagina.
-   - Het **extensie-icoon** in de Safari-werkbalk.
-   - Beide tonen exact hetzelfde formulier (`utils/calculator-form.js`), zodat ze niet uit elkaar kunnen lopen.
-
-3. **Instelbare uitgangspunten:** bezitsduur, kilometers per jaar en provincie zijn direct in het formulier aan te passen. Ze worden opgeslagen in `chrome.storage.local` en bij de volgende berekening hergebruikt.
-
-4. **Volautomatische ANWB Autokosten Calculator:**
-   - Opent de ANWB-rekentool in een nieuw tabblad.
-   - Doorloopt alle stappen: kenteken, uitvoering (standaardkeuze), aanschafdatum (huidige maand/jaar), kilometerstand, aanschafprijs en de gekozen uitgangspunten.
-   - Toont de maandkosten in een statusbalk bovenin zodra het resultaat binnen is.
-
-## Safari Extensie Installeren & Testen
-
-In recente Safari-versies (macOS Sonoma / Sequoia en Safari 17+) kun je de extensie direct als tijdelijke extensie inladen **zonder Xcode build-stappen**:
-
-### Stap 1: Ontwikkelaarsfuncties aanzetten in Safari
-1. Open **Safari**.
-2. Open de instellingen via het menu: **Safari > Instellingen...** (of toetscombinatie `Cmd + ,`).
-3. Klik op het tabblad **Geavanceerd** (*Advanced*).
-4. Vink onderin het vakje aan: **"Toon functies voor webontwikkelaars"** (*Show features for web developers*).
-
-### Stap 2: Niet-ondertekende extensies toestaan
-1. Klik in Safari's instellingenvenster op het nieuwe tabblad **Ontwikkelaar** (*Developer*), of open het menu **Ontwikkel** in de macOS menubalk.
-2. Schakel **"Niet-ondertekende extensies toestaan"** (*Allow Unsigned Extensions*) in (voer eventueel je macOS wachtwoord in ter bevestiging).
-
-### Stap 3: Extensie toevoegen
-1. Kies in het menu **Ontwikkel** (*Develop*) voor:
-   **Voeg tijdelijke extensie toe...** (*Add Temporary Extension...*)
-2. Selecteer deze projectmap:
-   ```
-   /Users/jortdejong/GitHub/car-cost-extension
-   ```
-   *(de map die het bestand `manifest.json` bevat)*
-3. Klik op **Selecteer**.
-4. De extensie is direct actief in Safari!
+> **Let op:** dit is een persoonlijk, onofficieel project. Het is niet verbonden aan, en wordt niet ondersteund door, AutoScout24 of ANWB. Zie [Disclaimer](#disclaimer).
 
 ---
 
-## Testen van de werking
+## Wat het doet
 
-1. Navigeer in Safari naar een AutoScout24 advertentiepagina, bijvoorbeeld:
-   ```
-   https://www.autoscout24.nl/aanbod/audi-q4-e-tron-35-s-edition-55-kwh-20-velgen-zwart-optiek-elektrisch-grijs-cat_ma9mo75830-bcb44279-e53b-4f7c-8525-4101947c6be0
-   ```
-2. Bekijk de **ANWB Autokosten** widget in de zijbalk / zwevend rechtsonder.
-3. Controleer de automatisch uitgelezen gegevens (kenteken, km-stand, prijs).
-4. Klik op **"📊 Bereken kosten op ANWB.nl"**.
-5. Safari opent een nieuw tabblad met de ANWB rekentool.
-6. Volg de voortgang via de blauwe ANWB statusbalk bovenin; de extensie doorloopt alle stappen automatisch tot het eindresultaat met de maandlasten verschijnt!
+1. **Leest de advertentie uit.** Kenteken, kilometerstand en vraagprijs worden van de AutoScout24-pagina gehaald. Kentekens worden herkend aan de hand van alle Nederlandse RDW-sidecodes (1 t/m 14), via `__NEXT_DATA__`, JSON-LD, specificatietabellen en de advertentietekst. De prijs wordt bewust *inclusief* BTW gekozen: ex-BTW- en doorgestreepte prijzen worden genegeerd.
 
----
+2. **Twee identieke ingangen.** Een zwevende knop rechtsonder op de advertentiepagina, en het extensie-icoon in de Safari-werkbalk. Beide tonen exact hetzelfde formulier, zodat ze niet uit elkaar kunnen lopen.
 
-## Bestandsstructuur
+3. **Instelbare uitgangspunten.** Bezitsduur, kilometers per jaar en provincie pas je direct in het formulier aan. Ze worden lokaal opgeslagen en bij de volgende berekening hergebruikt.
+
+4. **Doorloopt de ANWB-rekentool.** De extensie vult het kenteken in, kiest de standaarduitvoering, zet de aanschafdatum op de huidige maand, en vult kilometerstand, aanschafprijs en jouw uitgangspunten in. Daarna word je doorgestuurd naar het resultaat met de maandelijkse kosten.
+
+<p align="center">
+  <img src="docs/popup.png" alt="Het extensieformulier in de Safari-werkbalk" width="300">
+</p>
+
+## Installeren
+
+De extensie is niet ondertekend en staat niet in de App Store, dus je laadt hem in Safari als tijdelijke extensie.
+
+### 1. Ontwikkelaarsfuncties aanzetten
+
+1. Open **Safari** en ga naar **Safari › Instellingen…** (`⌘,`).
+2. Open het tabblad **Geavanceerd**.
+3. Vink **"Toon functies voor webontwikkelaars"** aan.
+
+### 2. Niet-ondertekende extensies toestaan
+
+1. Open in de menubalk het menu **Ontwikkel**.
+2. Kies **"Niet-ondertekende extensies toestaan"** en bevestig met je wachtwoord.
+
+### 3. Extensie laden
+
+1. Kies in het menu **Ontwikkel** voor **"Voeg tijdelijke extensie toe…"**.
+2. Selecteer de map met `manifest.json` (de hoofdmap van deze repo).
+3. Klaar — de extensie is actief.
+
+> Safari vergeet tijdelijke extensies zodra je hem afsluit. Na een herstart van Safari laad je hem opnieuw. Voor dagelijks gebruik kun je de extensie in Xcode omzetten naar een echte app; dat vraagt wel een Apple Developer-account voor distributie.
+
+## Gebruik
+
+1. Open een advertentie op `autoscout24.nl/aanbod/…`.
+2. Klik op **ANWB Kosten** rechtsonder, of op het extensie-icoon in de werkbalk.
+3. Controleer de uitgelezen gegevens en pas zo nodig de uitgangspunten aan.
+4. Klik op **Bereken op ANWB.nl**. Er opent een nieuw tabblad waarin de rekentool automatisch wordt doorlopen.
+
+Staat het kenteken niet in de advertentie? Dan laat het formulier dat weten en kun je het zelf invullen — het kenteken is het enige dat ANWB nodig heeft om de auto op te zoeken.
+
+## Hoe het werkt
 
 ```
-car-cost-extension/
-├── manifest.json              # Manifest V3 definitie voor Safari/WebExtensions
-├── background.js              # Service worker: tab- en message-beheer
-├── utils/
-│   ├── kenteken.js            # RDW sidecode validatie, opmaak en extractie
-│   ├── dom-utils.js           # React-bewuste form helpers voor de ANWB-tool
-│   └── calculator-form.js     # Het gedeelde formulier (popup + zwevende knop)
-├── content/
-│   ├── autoscout.js           # Content script voor AutoScout24 pagina's
-│   ├── autoscout.css          # Styling van de zwevende knop
-│   ├── form.css               # Styling van het gedeelde formulier
-│   ├── anwb.js                # Automatisering van de ANWB-rekentool
-│   └── anwb.css               # Styling van de voortgangsbalk
-├── popup/
-│   ├── popup.html             # Werkbalk-popup (rendert het gedeelde formulier)
-│   ├── popup.js               # Vult het formulier met gegevens van de actieve tab
-│   └── popup.css              # Popup-specifieke styling
-├── icons/                     # Extensie iconen
-├── scripts/
-│   └── generate-icons.js      # Generator voor PNG iconen
-└── test/                      # Unit-, UI- en end-to-end tests
+manifest.json          Manifest V3 (Safari / WebExtensions)
+background.js          Service worker: tab- en message-beheer
+utils/
+  kenteken.js          RDW-sidecode validatie, opmaak en extractie
+  dom-utils.js         React-bewuste formulierhulpjes voor de ANWB-tool
+  calculator-form.js   Het gedeelde formulier (popup + zwevende knop)
+content/
+  autoscout.js         Leest de advertentiepagina uit
+  form.css             Styling van het gedeelde formulier
+  autoscout.css        Styling van de zwevende knop
+  anwb.js              Automatiseert de ANWB-rekentool
+  anwb.css             Voortgangsbalk tijdens het automatiseren
+popup/                 Werkbalk-popup (rendert hetzelfde formulier)
 ```
 
-## Tests
+Een paar keuzes die het gedrag van de ANWB-tool verklaren, allemaal tegen de echte site geverifieerd:
+
+- **React-bewaarde invoervelden.** De rekentool gebruikt React Hook Form. Alleen `.value` zetten en een `change`-event sturen is niet genoeg; de interne value tracker van React moet ook bijgewerkt worden. Dat regelt `setInputValue`.
+- **De eerste klik wordt altijd afgewezen.** React Hook Form weigert een submit die binnenkomt terwijl het formulier nog aan het settelen is, ook als het veld al een geldige waarde heeft. Opnieuw klikken *zonder opnieuw te typen* lukt wel. Daarom vult de automatisering elk veld één keer en klikt daarna bij elke ronde opnieuw.
+- **Velden verschijnen in golven.** Bezitsduur, kilometers per jaar en provincie bestaan pas in de DOM nadat jaar, maand, prijs en kilometerstand geldig zijn. De automatisering wacht daarom per veld tot het bestaat.
+- **De automatisering is een lus, geen vaste volgorde.** Ze kijkt welk scherm zichtbaar is en rondt dat af, zodat ze herstelt als ANWB een scherm overslaat (bijvoorbeeld als er maar één uitvoering is) of van volgorde verandert.
+
+## Privacy
+
+De extensie verstuurt niets naar de ontwikkelaar. Er is geen server, geen analytics en geen account. Alle gegevens blijven in je browser:
+
+- Het kenteken, de kilometerstand en de prijs worden van de pagina gelezen en naar `anwb.nl` gestuurd, omdat de rekentool daar nu eenmaal om vraagt.
+- Je uitgangspunten worden lokaal opgeslagen in `chrome.storage.local`, zodat je ze niet elke keer opnieuw hoeft in te vullen.
+- Er worden geen gegevens verzameld, bewaard of gedeeld.
+
+## Ontwikkelen
+
+Vereist Node.js 18 of nieuwer.
 
 ```bash
+npm install
 npm test              # alles: unit + UI + live end-to-end
-npm run test:unit     # snel, offline (kenteken, extractie, dom-utils, manifest)
+npm run test:unit     # snel en offline: kenteken, extractie, dom-utils, manifest
 npm run test:ui       # laadt de echte popup en zwevende knop in WebKit
 npm run test:e2e      # doorloopt de echte ANWB-rekentool in WebKit
 ```
 
-De UI- en end-to-end tests draaien in **WebKit** (de engine van Safari), zodat
-gedrag overeenkomt met de browser waarin de extensie gebruikt wordt. De
-end-to-end test heeft netwerktoegang nodig en raakt de echte ANWB-site.
+De UI- en end-to-end tests draaien in **WebKit**, de engine van Safari, via Playwright. Daardoor testen ze gedrag dat er in Chrome net anders uitziet — bijvoorbeeld dat WebKit padding op een native `<select>` negeert.
 
-> Let op: de kenteken-lookup van ANWB geeft soms een serverfout (504). De
-> automatisering probeert het dan opnieuw; een enkele keer duurt het daardoor
-> wat langer.
+De UI-tests laden de **echte** bestanden uit deze repo, niet een kopie. Ze controleren onder andere dat het manifest elk script laadt dat de code nodig heeft, dat alle formuliervelden even hoog zijn, en dat het openen van een tab goed gaat in alle drie de contexten (popup, content script, en een background die niet reageert).
+
+De end-to-end test heeft netwerktoegang nodig en raakt de echte ANWB-site. Die is niet geschikt voor CI.
+
+> De kenteken-lookup van ANWB geeft met enige regelmaat een serverfout (504). De automatisering probeert het dan opnieuw, waardoor een berekening soms wat langer duurt.
+
+## Disclaimer
+
+Dit is een persoonlijk project en **geen officieel product**. Het is niet verbonden aan, goedgekeurd door of ondersteund door AutoScout24 of ANWB. Alle merknamen zijn eigendom van hun respectievelijke eigenaren.
+
+De extensie leest pagina's van AutoScout24 en vult formulieren op anwb.nl in. Het automatiseren van een website kan in strijd zijn met de gebruiksvoorwaarden van die site. Gebruik het daarom voor je eigen, persoonlijke gebruik en met mate. De auteur is niet aansprakelijk voor eventuele gevolgen.
+
+De berekende bedragen komen volledig van ANWB en zijn een indicatie. Controleer altijd de officiële cijfers voordat je een beslissing neemt.
+
+## Licentie
+
+[MIT](LICENSE)

@@ -11,14 +11,14 @@
 
 const ANWB_URL = 'https://www.anwb.nl/auto/autokosten/berekenen';
 
-console.log('[CarCostExtension] Background script initialized');
+console.log('[AutokostenBerekenaar] Background script initialized');
 
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('[CarCostExtension] Installed/updated:', details.reason);
+  console.log('[AutokostenBerekenaar] Installed/updated:', details.reason);
 });
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  console.log('[CarCostExtension] Message received:', request.action);
+  console.log('[AutokostenBerekenaar] Message received:', request.action);
 
   switch (request.action) {
     case 'startCalculation':
