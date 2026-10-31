@@ -26,6 +26,19 @@ Een Safari-extensie die occasions op **AutoScout24.nl** uitleest (kenteken, kilo
 
    > **Let op:** AutoScout24 en ANWB noemen modellen niet hetzelfde. AutoScout24 zegt "GLC 300" waar ANWB "Glc-Klasse" heeft, en "318I" waar ANWB alleen "3-Serie" kent. Een verkeerde koppeling levert een plausibel maar onjuist bedrag op, dus bij een onzekere match meldt de statusbalk welke keuze is gemaakt, zodat je het kunt controleren. Lukt koppelen helemaal niet, dan stopt de automatisering met een duidelijke melding in plaats van te gokken.
 
+6. **Opties.** Op de merk/model-route vraagt ANWB welke opties op de auto zitten; die beïnvloeden de restwaarde. De extensie vinkt aan waarvoor de advertentie bewijs levert.
+
+   Dat gebeurt bewust **niet** met een lijst per merk of model. Zo'n lijst zou verouderen zodra een van beide sites iets verandert, en de optielijst verschilt per auto. In plaats daarvan wordt de tekst van ANWB aan een **concept** gekoppeld, en dat concept wordt beantwoord met feiten over de advertentie:
+
+   | ANWB | AutoScout24 |
+   |---|---|
+   | "Metallic lak" | het veld `paintType` (`Metallic` / `Solid`) |
+   | een vraag over een dak | elk item in de uitrustingslijst dat op een dak wijst |
+
+   Beide kanten blijven merkloos, dus dit werkt voor elke auto. Een test controleert dat er nergens een merknaam in de conceptlijst staat.
+
+   Herkent de extensie een optie niet, dan blijft het vakje **uit**. Een onterecht aangevinkte optie verhoogt de waarde van de auto en daarmee het berekende bedrag, dus niets doen is de veiligere fout.
+
 <p align="center">
   <img src="docs/popup.png" alt="Het extensieformulier in de Safari-werkbalk" width="300">
 </p>
@@ -113,6 +126,7 @@ utils/
   dom-utils.js         React-bewuste formulierhulpjes voor de ANWB-tool
   calculator-form.js   Het gedeelde formulier (popup + zwevende knop)
   vehicle.js           Merk/model-koppeling voor de terugvaloptie
+  options.js           Koppelt ANWB-optievragen aan advertentiegegevens
 content/
   autoscout.js         Leest de advertentiepagina uit
   form.css             Styling van het gedeelde formulier
