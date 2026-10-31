@@ -70,7 +70,21 @@ Je hebt daar **volledige Xcode** voor nodig (niet alleen de Command Line Tools),
 
 4. Zet de extensie aan in **Safari › Instellingen › Extensies**.
 
-Het Xcode-project komt **naast** deze repo te staan (in `../autokosten-berekenaar-safari`), niet erin. Dat is bewust: de converter scant de extensiemap op bestanden, en zijn eigen uitvoer daarin schrijven kan verwarring geven. Het project verwijst naar de bestanden in deze repo in plaats van ze te kopiëren, dus je kunt blijven doorwerken in deze map en daarna in Xcode opnieuw bouwen.
+Het Xcode-project komt **naast** deze repo te staan (in `../autokosten-berekenaar-safari`), niet erin. Dat is bewust: de converter scant de extensiemap op bestanden, en zijn eigen uitvoer daarin schrijven kan verwarring geven.
+
+### Na een codewijziging
+
+De converter kopieert de extensiebestanden **in** het Xcode-project. Een aanpassing in deze repo bereikt Safari dus niet vanzelf: `xcodebuild` bouwt opnieuw vanuit die kopie en kan met succes bouwen terwijl er nog oude code in zit.
+
+Gebruik daarom:
+
+```bash
+npm run build:safari     # kopieert de gewijzigde bestanden en bouwt opnieuw
+```
+
+Daarna moet Safari volledig afsluiten (**⌘Q** — het sluiten van het venster is niet genoeg), want Safari bewaart extensiecode in de cache. Content scripts injecteren bovendien niet in tabbladen die al open staan, dus herlaad een openstaande advertentiepagina.
+
+> De opzet met drie kopieën (repo, Xcode-project, gebouwde app) is een bewuste maar onhandige keuze: hij voorkomt dat `node_modules` in de extensie belandt, maar vraagt om die synchronisatiestap. Wie liever zonder die stap werkt, kan `--copy-resources` uit `scripts/make-safari-app.sh` halen, zodat het project direct naar de bestanden verwijst.
 
 > **Verspreiden naar anderen** is een grotere stap: dan heb je een betaald Apple Developer-account nodig ($99 per jaar) om de app te ondertekenen en te notariseren. Zonder dat kunnen anderen de app niet zonder waarschuwing installeren.
 

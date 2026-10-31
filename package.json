@@ -8,7 +8,9 @@
     "test:unit": "node test/test_kenteken.js && node test/test_extraction.js && node test/test_dom_utils.js && node test/test_manifest.js",
     "test:ui": "node test/test_ui.mjs",
     "test:e2e": "node test/test_anwb_e2e.mjs",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "app:safari": "./scripts/make-safari-app.sh",
+    "build:safari": "./scripts/sync-to-safari.sh"
   },
   "keywords": [
     "safari-extension",
