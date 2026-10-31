@@ -10,6 +10,7 @@ const scripts = [
   readSource('utils/kenteken.js'),
   readSource('utils/dom-utils.js'),
   readSource('utils/vehicle.js'),
+  readSource('utils/options.js'),
   readSource('content/anwb.js'),
 ];
 
@@ -27,6 +28,10 @@ const payload = {
     doors: 5,
     fuel: 'Elektro/Benzine',
     transmission: 'Automatisch',
+    // This listing is metallic with a glass roof, so both of the options ANWB
+    // offers for this car should be ticked.
+    paintType: 'Metallic',
+    equipment: ['Airconditioning', 'Open dak', 'LED verlichting'],
   },
   timestamp: Date.now(),
 };
@@ -61,6 +66,7 @@ try {
   console.log(`\n✓ Monthly: € ${results.monthly}`);
   console.log(`✓ Yearly : € ${results.yearly}`);
   if (brand) console.log(`✓ Brand  : ${brand}`);
+  if (results.optionsTicked) console.log(`✓ Options: ${results.optionsTicked.join(', ')}`);
   ok = Boolean(results.monthly);
 } catch (err) {
   console.error('\n✗ FAILED:', err.message.split('\n')[0]);

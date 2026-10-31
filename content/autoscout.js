@@ -103,6 +103,7 @@
     const vehicle = {
       brand: null, model: null, productionDate: null,
       doors: null, fuel: null, transmission: null,
+      paintType: null, equipment: [],
     };
 
     const readJsonLd = () => {
@@ -180,7 +181,60 @@
       }
     }
 
+    // Paint type and the equipment list come from __NEXT_DATA__ too.
+    readFromNextData(vehicle);
+
     return vehicle;
+  }
+
+  /**
+   * Pull paint type and equipment out of __NEXT_DATA__.
+   *
+   * `paintType` is a dedicated field ("Metallic", "Solid"), which is what ANWB
+   * means by its "Metallic lak" option — a concept, not a make-specific term.
+   *
+   * `equipment` is the flat list of feature names, which is how we answer
+   * ANWB's other option questions without a per-make mapping table.
+   */
+  function readFromNextData(vehicle) {
+    const nextData = document.getElementById('__NEXT_DATA__');
+    if (!nextData) return;
+
+    let parsed;
+    try {
+      parsed = JSON.parse(nextData.textContent);
+    } catch (err) {
+      console.warn('[AutokostenBerekenaar] __NEXT_DATA__ lezen mislukt:', err);
+      return;
+    }
+
+    // Find listingDetails.vehicle once, then read several fields off it.
+    const findVehicle = (node) => {
+      if (!node || typeof node !== 'object') return null;
+      if (node.paintType !== undefined || node.equipment) return node;
+      for (const value of Object.values(node)) {
+        const hit = findVehicle(value);
+        if (hit) return hit;
+      }
+      return null;
+    };
+
+    const vehicleNode = findVehicle(parsed);
+    if (!vehicleNode) return;
+
+    vehicle.paintType ||= vehicleNode.paintType || null;
+
+    // equipment is grouped by category: { comfortAndConvenience: [ {id}, ... ] }
+    if (!vehicle.equipment.length && vehicleNode.equipment && typeof vehicleNode.equipment === 'object') {
+      const names = [];
+      for (const items of Object.values(vehicleNode.equipment)) {
+        if (!Array.isArray(items)) continue;
+        for (const item of items) {
+          if (item && typeof item.id === 'string') names.push(item.id);
+        }
+      }
+      vehicle.equipment = names;
+    }
   }
 
   /**

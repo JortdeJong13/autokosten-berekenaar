@@ -243,6 +243,11 @@
       doors: vehicle.doors ?? null,
       fuel: vehicle.fuel || null,
       transmission: vehicle.transmission || null,
+      // Evidence used later to answer ANWB's options step. Dropping these
+      // here silently left every option unticked, because the matcher saw a
+      // vehicle with no paint type and no equipment.
+      paintType: vehicle.paintType || null,
+      equipment: Array.isArray(vehicle.equipment) ? vehicle.equipment : [],
     };
 
     const usable = payload.brand && payload.model && payload.year;

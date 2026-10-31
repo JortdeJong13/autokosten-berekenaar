@@ -150,6 +150,13 @@
     return select;
   }
 
+  /** Tick a checkbox/radio the way a user click would, so React sees it. */
+  function checkCheckbox(element) {
+    if (!element) return false;
+    element.click();
+    return element.checked;
+  }
+
   /** Find a visible, enabled button whose text matches `pattern`. */
   function findButton(pattern, root = document) {
     const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, 'i');
@@ -211,6 +218,7 @@
     setInputValue,
     setSelectValue,
     setSelectWhenReady,
+    checkCheckbox,
     findButton,
     clickButton,
     dismissCookieBanners,

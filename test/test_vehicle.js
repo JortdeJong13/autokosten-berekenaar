@@ -171,6 +171,22 @@ test('builds a payload from a full listing', () => {
   assert.strictEqual(p.doors, 5);
 });
 
+test('carries the fields the options matcher needs', () => {
+  // Dropping these made every ANWB option go unticked, silently.
+  const p = VehicleUtils.buildVehiclePayload({
+    brand: 'Mercedes-Benz', model: 'GLC 300', year: 2021,
+    paintType: 'Metallic', equipment: ['Open dak', 'Airconditioning'],
+  });
+  assert.strictEqual(p.paintType, 'Metallic');
+  assert.deepStrictEqual(p.equipment, ['Open dak', 'Airconditioning']);
+});
+
+test('defaults equipment to an empty list rather than undefined', () => {
+  const p = VehicleUtils.buildVehiclePayload({ brand: 'Kia', model: 'Picanto', year: 2021 });
+  assert.deepStrictEqual(p.equipment, []);
+  assert.strictEqual(p.paintType, null);
+});
+
 test('refuses to build a payload without brand, model and year', () => {
   assert.strictEqual(VehicleUtils.buildVehiclePayload({ brand: 'Audi' }), null);
   assert.strictEqual(VehicleUtils.buildVehiclePayload({ brand: 'Audi', model: 'A3' }), null);

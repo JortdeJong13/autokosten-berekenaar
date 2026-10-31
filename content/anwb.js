@@ -28,6 +28,7 @@
   const DOM = window.DOMUtils;
   const Kenteken = window.KentekenUtils;
   const VehicleUtils = window.VehicleUtils;
+  const OptionsUtils = window.OptionsUtils;
   const { sleep, waitFor, AbortedError } = DOM;
 
   const DEFAULT_SETTINGS = {
@@ -47,6 +48,8 @@
   let settings = { ...DEFAULT_SETTINGS };
   // True when the listing had no plate and we are describing the car instead.
   let useMerkModel = false;
+  // Option labels the automation ticked, reported with the result.
+  let tickedOptions = [];
   let running = false;
   let stopped = false;
   let banner = null;
@@ -64,6 +67,12 @@
     // It grows in stages: Merk -> Model -> Bouwjaar -> Bouwmaand -> [extra].
     isMerkModel: () => hasField('select[name="brand"]') || hasField('select[name="model"]'),
     isUitvoering: () => hasField('input[name="selectedConfigurationId"]'),
+    // ANWB's options step, present only on the make/model path. Detected by its
+    // heading, since it is a set of unlabelled checkboxes.
+    isOpties: () =>
+      Array.from(document.querySelectorAll('h1,h2,h3,p,span')).some((el) =>
+        /invloed op de waarde/i.test(el.textContent)
+      ) && document.querySelectorAll('input[type="checkbox"]').length > 0,
     isAanschaf: () =>
       hasField('input[name="mileageAtPurchase"]') ||
       hasField('select[name="usageInMonths"]') ||
@@ -378,8 +387,61 @@
       }
     }
 
-    await advance(/volgende stap/i, () => !screen.isMerkModel() || screen.isUitvoering() || screen.isAanschaf(), { step: 45 });
+    await advance(
+      /volgende stap/i,
+      () => !screen.isMerkModel() || screen.isUitvoering() || screen.isOpties() || screen.isAanschaf(),
+      { step: 45 }
+    );
     filled.clear();
+  }
+
+  /**
+   * ANWB's options step: a list of checkboxes whose labels are option names.
+   * Only appears on the make/model path, and the list is per car.
+   *
+   * We tick only what the listing gives real evidence for, matched by concept
+   * (see utils/options.js) rather than by any make-specific table. An unticked
+   * box is the safe default: a wrong tick inflates the car's value.
+   */
+  async function doOpties(data, filled) {
+    setStatus('Opties beoordelen…', { step: 50 });
+
+    if (!filled.has('opties')) {
+      const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'))
+        .filter((cb) => isVisible(cb) && !cb.closest('header, nav'));
+
+      // Each checkbox's label text carries the option name and its price.
+      const labels = checkboxes.map((cb) => {
+        const scope = cb.closest('label')
+          || (cb.id && document.querySelector(`label[for="${cb.id}"]`))
+          || cb.parentElement?.parentElement;
+        return (scope?.textContent || '').trim().replace(/\s+/g, ' ');
+      });
+
+      const decisions = OptionsUtils?.resolveOptions(labels, data.vehicle) || [];
+      const ticked = [];
+
+      decisions.forEach((decision, index) => {
+        const cb = checkboxes[index];
+        if (!cb || !decision.tick) return;
+        if (!cb.checked) DOM.checkCheckbox(cb);
+        ticked.push(decision.label.replace(/€\s*[\d.,]+/, '').trim());
+      });
+
+      filled.add('opties');
+      tickedOptions = ticked;
+
+      if (ticked.length) {
+        setStatus(`Opties aangevinkt: ${ticked.join(', ')}`, { step: 55 });
+      } else {
+        setStatus('Geen opties herkend in de advertentie.', { step: 55 });
+      }
+      console.log('[AutokostenBerekenaar] Opties:', decisions.map((d) =>
+        `${d.tick ? 'AAN' : 'uit'} ${d.label.slice(0, 40)}${d.source ? ` (${d.source})` : ''}`).join(' | '));
+    }
+
+    await advance(/volgende stap/i, () => !screen.isOpties() || screen.isAanschaf(), { step: 60 });
+    filled.delete('opties');
   }
 
   /**
@@ -403,7 +465,14 @@
       guard();
     }
 
-    await advance(/volgende stap/i, () => screen.isAanschaf() || screen.isResultaat(), { step: 60 });
+    // On the make/model path an options step follows, so "reached aanschaf" is
+    // not the only way to be done here. Stopping only on aanschaf/resultaat
+    // clicked straight past the options screen and left every box unticked.
+    await advance(
+      /volgende stap/i,
+      () => screen.isOpties() || screen.isAanschaf() || screen.isResultaat(),
+      { step: 60 }
+    );
     filled.delete('uitvoering');
   }
 
@@ -526,7 +595,9 @@
 
     if (chrome?.storage?.local) {
       await chrome.storage.local.remove(['pendingCalculation']);
-      await chrome.storage.local.set({ lastResult: { ...results, timestamp: Date.now() } });
+      await chrome.storage.local.set({
+        lastResult: { ...results, optionsTicked: tickedOptions, timestamp: Date.now() },
+      });
     }
 
     // Let the banner sit on the finished result instead of disappearing.
@@ -558,6 +629,12 @@
 
         if (screen.isAanschaf()) {
           await doAanschaf(pendingData, filled);
+          idlePasses = 0;
+          continue;
+        }
+
+        if (screen.isOpties()) {
+          await doOpties(pendingData, filled);
           idlePasses = 0;
           continue;
         }

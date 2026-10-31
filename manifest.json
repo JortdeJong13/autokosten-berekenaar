@@ -37,6 +37,7 @@
       "js": [
         "utils/kenteken.js",
         "utils/vehicle.js",
+        "utils/options.js",
         "utils/calculator-form.js",
         "content/autoscout.js"
       ],
@@ -54,6 +55,7 @@
         "utils/kenteken.js",
         "utils/dom-utils.js",
         "utils/vehicle.js",
+        "utils/options.js",
         "content/anwb.js"
       ],
       "css": [
