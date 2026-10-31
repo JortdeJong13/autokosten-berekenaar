@@ -49,7 +49,9 @@ console.log('popup/popup.html');
         remove: (keys, cb) => { for (const k of [].concat(keys)) delete store[k]; cb && cb(); },
       } },
       runtime: { lastError: null, sendMessage: (msg, cb) => cb && cb({ success: true }) },
+      tabs: { create: (opts, cb) => { window.__tabs.push(opts.url); cb && cb({ id: 1 }); } },
     };
+    window.__tabs = [];
   });
 
   // file:// pages can load sibling scripts, which is enough to exercise the popup.
@@ -117,12 +119,46 @@ console.log('popup/popup.html');
   check('selects do not use the native appearance', heights.selectAppearance === 'none',
     `appearance was "${heights.selectAppearance}"`);
 
-  // Invalid kenteken is rejected with a message.
+  // A malformed plate is still rejected.
   await page.fill('[data-role="plate"]', 'ABC');
   await page.click('[data-role="submit"]');
   await page.waitForTimeout(200);
   const feedback = await page.textContent('[data-role="feedback"]');
   check('invalid kenteken shows an error', /geldig/i.test(feedback || ''), `got "${feedback}"`);
+
+  // With no plate AND no vehicle details, submitting must be blocked: ANWB
+  // cannot identify the car at all.
+  await page.fill('[data-role="plate"]', '');
+  await page.click('[data-role="submit"]');
+  await page.waitForTimeout(200);
+  const blocked = await page.textContent('[data-role="feedback"]');
+  check('empty plate with no vehicle details is blocked',
+    /kenteken in|merk en model/i.test(blocked || ''), `got "${blocked}"`);
+
+  // With vehicle details, an empty plate is allowed and the field says so.
+  await page.evaluate(() => {
+    window.__form.setVehicleDetails({ brand: 'Mercedes-Benz', model: 'GLC 300' });
+  });
+  await page.waitForTimeout(100);
+  const hint = await page.textContent('[data-role="plate-hint"]');
+  const label = await page.textContent('[data-role="plate-label"]');
+  check('vehicle details make the plate optional',
+    /optioneel/i.test(label || ''), `label was "${label}"`);
+  check('hint names the car it will look up',
+    /Mercedes-Benz GLC 300/.test(hint || ''), `hint was "${hint}"`);
+
+  await page.click('[data-role="submit"]');
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => {
+    const p = window.chrome.__store.pendingCalculation;
+    return { tabs: window.__tabs, plate: p ? p.licensePlate : 'no payload',
+             vehicle: p ? p.vehicle : null };
+  });
+  check('opens the ANWB tab without a plate when vehicle details exist',
+    after.tabs.length === 1 && after.tabs[0].includes('anwb.nl'), JSON.stringify(after));
+  check('payload carries the vehicle details, not a plate',
+    after.plate === null && after.vehicle?.brand === 'Mercedes-Benz' && after.vehicle?.model === 'GLC 300',
+    JSON.stringify(after));
 
   await context.close();
 }

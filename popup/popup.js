@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
   });
 
+  // Exposed so the UI tests can drive prefill/validation without the tab API.
+  window.__form = form;
+
   form.applySettings(await window.CalculatorForm.readSettings());
 
   const details = await extractFromActiveTab();
@@ -23,13 +26,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       mileage: details.mileage,
       price: details.price,
       title: details.title,
+      vehicle: details.vehicle,
     });
 
     if (details.licensePlate) {
       form.showFeedback('Gegevens overgenomen van de pagina.', 'info');
     } else {
-      form.showFeedback('Geen kenteken in de advertentie gevonden, vul het hier in.', 'info');
-      form.focusPlate();
+      form.showFeedback('Geen kenteken in de advertentie. De auto wordt op merk en model opgezocht.', 'info');
     }
   }
 

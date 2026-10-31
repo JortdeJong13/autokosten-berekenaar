@@ -355,6 +355,7 @@
           mileage: details.mileage,
           price: details.price,
           title: details.title,
+          vehicle: details.vehicle,
         });
         await form.applySettings(await window.CalculatorForm.readSettings());
       } else {
@@ -363,6 +364,7 @@
           mileage: details.mileage,
           price: details.price,
           title: details.title,
+          vehicle: details.vehicle,
         });
       }
 

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "npm run test:unit && npm run test:ui && npm run test:e2e",
     "test:unit": "node test/test_kenteken.js && node test/test_extraction.js && node test/test_dom_utils.js && node test/test_vehicle.js && node test/test_manifest.js",
-    "test:ui": "node test/test_ui.mjs",
+    "test:ui": "node test/test_ui.mjs && node test/test_no_plate_flow.mjs",
     "test:e2e": "node test/test_anwb_e2e.mjs && node test/test_merk_model_e2e.mjs",
     "generate-icons": "node scripts/generate-icons.js",
     "app:safari": "./scripts/make-safari-app.sh",

@@ -48,11 +48,26 @@ test('every referenced file exists', () => {
   }
 });
 
-test('the popup loads the shared form and its styles', () => {
+test('the popup loads every shared module it depends on', () => {
   const html = fs.readFileSync(path.join(ROOT, 'popup', 'popup.html'), 'utf8');
-  assert.match(html, /calculator-form\.js/, 'popup must load utils/calculator-form.js');
-  assert.match(html, /kenteken\.js/, 'popup must load utils/kenteken.js');
+  for (const dep of ['kenteken.js', 'vehicle.js', 'calculator-form.js']) {
+    assert.match(html, new RegExp(dep.replace('.', '\\.')), `popup must load utils/${dep}`);
+  }
   assert.match(html, /form\.css/, 'popup must load content/form.css');
+});
+
+test('vehicle.js is loaded wherever calculator-form.js is', () => {
+  // calculator-form.js calls VehicleUtils, so the two must ship together.
+  const popupHtml = fs.readFileSync(path.join(ROOT, 'popup', 'popup.html'), 'utf8');
+  assert.match(popupHtml, /vehicle\.js/, 'popup loads the form but not vehicle.js');
+
+  for (const cs of manifest.content_scripts) {
+    if (!cs.js.includes('utils/calculator-form.js')) continue;
+    assert.ok(cs.js.includes('utils/vehicle.js'),
+      'a content script loading calculator-form.js must also load utils/vehicle.js');
+    assert.ok(cs.js.indexOf('utils/vehicle.js') < cs.js.indexOf('utils/calculator-form.js'),
+      'utils/vehicle.js must load before utils/calculator-form.js');
+  }
 });
 
 test('the AutoScout content script loads the shared form and its styles', () => {

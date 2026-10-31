@@ -36,8 +36,8 @@
       ],
       "js": [
         "utils/kenteken.js",
-        "utils/calculator-form.js",
         "utils/vehicle.js",
+        "utils/calculator-form.js",
         "content/autoscout.js"
       ],
       "css": [

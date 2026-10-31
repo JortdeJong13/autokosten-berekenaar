@@ -211,12 +211,13 @@
 
       <form class="cce-form" novalidate>
         <div class="cce-field">
-          <label class="cce-label" for="cce-plate">Kenteken</label>
+          <label class="cce-label" for="cce-plate" data-role="plate-label">Kenteken</label>
           <div class="cce-plate">
             <span class="cce-plate-nl">NL</span>
             <input type="text" id="cce-plate" class="cce-plate-input" data-role="plate"
                    placeholder="XX-XX-XX" maxlength="9" autocomplete="off" spellcheck="false" />
           </div>
+          <span class="cce-hint" data-role="plate-hint" hidden></span>
         </div>
 
         <div class="cce-row">
@@ -303,6 +304,35 @@
       feedback.hidden = true;
     }
 
+    // Vehicle details extracted from the listing. Used only when there is no
+    // plate, to drive ANWB's make/model form instead.
+    let vehicleDetails = null;
+
+    function hasVehicleDetails() {
+      return Boolean(vehicleDetails && vehicleDetails.brand && vehicleDetails.model);
+    }
+
+    /**
+     * When we know the car's make and model, ANWB can be driven without a plate,
+     * so say so instead of leaving the field looking mandatory.
+     */
+    function updatePlateHint() {
+      const hint = mount.querySelector('[data-role="plate-hint"]');
+      const label = mount.querySelector('[data-role="plate-label"]');
+      if (!hint) return;
+
+      if (hasVehicleDetails()) {
+        const { brand, model } = vehicleDetails;
+        label.textContent = 'Kenteken (optioneel)';
+        hint.textContent = `Geen kenteken nodig: ANWB zoekt op ${brand} ${model}.`;
+        hint.hidden = false;
+      } else {
+        label.textContent = 'Kenteken';
+        hint.hidden = true;
+        hint.textContent = '';
+      }
+    }
+
     // Persist settings as soon as they change, so the next calculation uses them.
     const saveSettings = () => writeSettings(currentSettings());
     years.addEventListener('change', saveSettings);
@@ -329,27 +359,32 @@
       clearFeedback();
 
       const cleanPlate = root.KentekenUtils?.clean(plate.value) || '';
-      if (cleanPlate.length !== 6) {
-        showFeedback('Vul een geldig kenteken in (6 tekens).');
-        plate.focus();
-        return;
-      }
-      if (!root.KentekenUtils?.isValid(cleanPlate)) {
-        showFeedback('Dit is geen geldig Nederlands kenteken.');
+      const hasPlate = cleanPlate.length === 6 && root.KentekenUtils?.isValid(cleanPlate);
+
+      // Without a plate we describe the car instead, so the user may submit
+      // with the field empty — but only if we actually know what the car is.
+      if (!hasPlate && !hasVehicleDetails()) {
+        showFeedback(
+          cleanPlate.length === 0
+            ? 'Vul een kenteken in, of zoek de auto op merk en model.'
+            : 'Dit is geen geldig Nederlands kenteken.'
+        );
         plate.focus();
         return;
       }
 
       const settings = currentSettings();
       const payload = {
-        licensePlate: root.KentekenUtils.format(cleanPlate),
-        cleanPlate,
+        licensePlate: hasPlate ? root.KentekenUtils.format(cleanPlate) : null,
+        cleanPlate: hasPlate ? cleanPlate : null,
         mileage: parseNumber(mileage.value),
         price: parseNumber(price.value),
         ownershipYears: settings.ownershipYears,
         kmPerYear: settings.kmPerYear,
         province: settings.province,
         carTitle: subtitle.dataset.carTitle || '',
+        // Present only on the make/model path; ignored when a plate is used.
+        vehicle: hasPlate ? null : vehicleDetails,
         timestamp: Date.now(),
       };
 
@@ -369,11 +404,22 @@
 
     return {
       /** Prefill the extracted AutoScout24 values. */
-      setValues({ licensePlate, mileage: km, price: carPrice, title } = {}) {
+      setValues({ licensePlate, mileage: km, price: carPrice, title, vehicle } = {}) {
         if (licensePlate) plate.value = licensePlate;
         if (Number.isFinite(km)) mileage.value = formatNumber(km);
         if (Number.isFinite(carPrice)) price.value = formatNumber(carPrice);
+        if (vehicle) vehicleDetails = vehicle;
         this.setTitle(title);
+        updatePlateHint();
+      },
+
+      /**
+       * Reflect whether a plate is required. With vehicle details on hand the
+       * field is optional, and not saying so leaves the user stuck.
+       */
+      setVehicleDetails(vehicle) {
+        vehicleDetails = vehicle || null;
+        updatePlateHint();
       },
 
       setTitle(title) {
