@@ -126,9 +126,12 @@ test('maps AS24 fuel labels onto ANWB options', () => {
   assert.strictEqual(VehicleUtils.mapFuel('Diesel'), 'Diesel');
 });
 
-test('returns null for pure electric, which ANWB never asks about', () => {
-  assert.strictEqual(VehicleUtils.mapFuel('Elektro'), null);
-  assert.strictEqual(VehicleUtils.mapFuel('Elektrisch'), null);
+test('maps pure electric to ANWB\'s "Elektrisch"', () => {
+  // EV-only cars get a single-option fuel dropdown reading "Elektrisch".
+  // Returning null left it blank and ANWB rejected the submit.
+  assert.strictEqual(VehicleUtils.mapFuel('Elektrisch'), 'Elektrisch');
+  assert.strictEqual(VehicleUtils.mapFuel('Elektro'), 'Elektrisch');
+  assert.strictEqual(VehicleUtils.mapFuel('Electric'), 'Elektrisch');
 });
 
 test('does not guess when the fuel is unknown', () => {
@@ -146,15 +149,16 @@ test('maps every AS24 fuel label that has an ANWB equivalent', () => {
     'Elektro/Diesel': 'PHEV Diesel',
     Benzine: 'Benzine',
     Diesel: 'Diesel',
+    Elektrisch: 'Elektrisch',
   };
   for (const [as24, anwb] of Object.entries(pairs)) {
     assert.strictEqual(VehicleUtils.mapFuel(as24), anwb, `${as24} should map to ${anwb}`);
   }
 });
 
-test('returns null for fuels ANWB has no option for', () => {
-  // ANWB's dropdown only offers Benzine, Diesel, PHEV Benzine, PHEV Diesel.
-  for (const label of ['Elektrisch', 'LPG', 'Ethanol', 'Gecomprimeerd aardgas', 'Waterstof', 'Overig']) {
+test('returns null for fuels ANWB genuinely has no option for', () => {
+  // Elektrisch is NOT in this list: ANWB does offer it for EV-only cars.
+  for (const label of ['LPG', 'Ethanol', 'Gecomprimeerd aardgas', 'Waterstof', 'Overig']) {
     assert.strictEqual(VehicleUtils.mapFuel(label), null, `${label} has no ANWB option`);
   }
 });

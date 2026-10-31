@@ -310,8 +310,15 @@
     // Which values came from the listing, so those fields can be hidden.
     const fromListing = { mileage: false, price: false };
 
+    /**
+     * True when the listing identified the car well enough for ANWB's
+     * make/model route. This is what decides whether the plate field is worth
+     * showing at all: if we can describe the car, the plate adds nothing.
+     */
     function hasVehicleDetails() {
-      return Boolean(vehicleDetails && vehicleDetails.brand && vehicleDetails.model);
+      if (!vehicleDetails || !vehicleDetails.brand || !vehicleDetails.model) return false;
+      const V = root.VehicleUtils;
+      return V ? Boolean(V.buildVehiclePayload(vehicleDetails)) : true;
     }
 
     /**
@@ -346,6 +353,7 @@
 
       // Collapse the row entirely when both of its fields are gone, otherwise
       // it leaves an empty gap above the settings.
+      // Collapse the whole km/price row when both came from the listing.
       const bothHidden = fromListing.mileage && fromListing.price;
       setHidden('kmprice-row', bothHidden);
     }

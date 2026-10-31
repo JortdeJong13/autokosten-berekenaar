@@ -52,7 +52,9 @@
     if (/^\s*[0-9\.\,\s]+(?:\s*km)?\s*$/i.test(text.trim())) {
       const digits = text.replace(/[^0-9]/g, '');
       const n = parseInt(digits, 10);
-      if (!isNaN(n) && n >= 100 && n <= 1000000) return n;
+      // A delivery-mileage car legitimately reads "1 km", so the floor is 0.
+      // The upper bound still guards against matching a year or a price.
+      if (!isNaN(n) && n >= 0 && n <= 1000000) return n;
     }
 
     // 2. Embedded in text
@@ -67,7 +69,7 @@
       if (m) {
         const digits = m[1].replace(/[^0-9]/g, '');
         const num = parseInt(digits, 10);
-        if (!isNaN(num) && num >= 100 && num <= 1000000) return num;
+        if (!isNaN(num) && num >= 0 && num <= 1000000) return num;
       }
     }
     return null;
@@ -238,6 +240,19 @@
   }
 
   /**
+   * True for this extension's own bundled source.
+   *
+   * When the extension is packaged into an app, its scripts can end up in the
+   * page's DOM. They contain example plates in comments, so scanning them
+   * yields a plate belonging to no car. Matched on distinctive strings that
+   * only our files carry.
+   */
+  function isExtensionSource(text) {
+    return /AutokostenBerekenaar|__anwbAutokostenLoaded|__carCostExtensionLoaded|OptionsUtils|VehicleUtils|KentekenUtils/.test(text)
+      || /Dutch License Plate \(Kenteken\) Utilities/.test(text);
+  }
+
+  /**
    * Fast, on-demand extraction from DOM (< 10ms execution time)
    */
   function extractCarDetails() {
@@ -320,12 +335,31 @@
       licensePlate = window.KentekenUtils?.findInText(document.body.innerText);
     }
 
-    // Scan script tags as quick fallback
+    // Scan script tags as quick fallback.
+    //
+    // Only inline JSON payloads are scanned. A <script src> has no textContent,
+    // but a *bundled* script does — and that includes our own source, whose
+    // comments contain example plates like "N-123-AB". Reading those produced a
+    // plate that is not on the car at all. Anything with a `src` is skipped.
     if (!licensePlate || !price || !mileage) {
       const scripts = document.querySelectorAll('script');
       for (const s of scripts) {
+        if (s.src) continue;
+
         const text = s.textContent || '';
         if (!text || text.length < 20 || text.length > 500000) continue;
+
+        // Heuristics alone are not enough here: our own shipped modules contain
+        // the word "kenteken" (in comments and selectors), so a keyword test
+        // matches them. Exclude them by identity instead.
+        if (isExtensionSource(text)) continue;
+
+        // Structured data worth reading is JSON or a JS state object. Our
+        // modules are neither and hold no vehicle facts.
+        const looksLikeData = /^\s*[\[{]/.test(text)
+          || /__NEXT_DATA__|application\/ld\+json/.test(text)
+          || /"(?:priceRaw|priceAmount|primaryPrice|mileage|mileageInKm|kenteken)"\s*:/.test(text);
+        if (!looksLikeData) continue;
 
         if (!licensePlate) {
           licensePlate = window.KentekenUtils?.findInText(text);

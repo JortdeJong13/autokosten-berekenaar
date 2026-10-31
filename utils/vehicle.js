@@ -59,20 +59,32 @@
   }
 
   /**
-   * ANWB's fuel dropdown only ever offers these four; there is no plain
-   * "Elektrisch" option, because a battery-only car does not need the question.
+   * Which ANWB fuel option each AutoScout24 label corresponds to.
+   *
+   * ANWB's dropdown varies per car. A car sold with several powertrains gets
+   * four options (Benzine, Diesel, PHEV Benzine, PHEV Diesel); a car that is
+   * only electric gets a single "Elektrisch". Both were checked against the
+   * live site.
+   *
+   * The plug-in patterns are matched before the plain ones so that
+   * "Elektro/Benzine" is not read as an ordinary petrol car.
    */
   const FUEL_MAP = [
     [/^elektro\s*\/\s*benzine$|^elektrobenzine$|^phev\s*benzine$/i, 'PHEV Benzine'],
     [/^elektro\s*\/\s*diesel$|^elektrodiesel$|^phev\s*diesel$/i, 'PHEV Diesel'],
     [/^benzine$|^petrol$|^gasoline$/i, 'Benzine'],
     [/^diesel$/i, 'Diesel'],
+    // Pure battery electric. ANWB does offer this, for cars that are EV-only.
+    [/^elektrisch$|^elektro$|^electric$|^bev$/i, 'Elektrisch'],
   ];
 
   /**
    * Map an AutoScout24 fuel label to the ANWB option text.
-   * Returns null when ANWB does not ask (e.g. a battery-only car), so callers
-   * can skip the field rather than guess.
+   *
+   * Returns null only for labels ANWB genuinely has no equivalent for (LPG,
+   * waterstof, ethanol, aardgas, overig). Callers must not treat null as
+   * "leave the field blank" when ANWB is showing it and asking for an answer —
+   * see resolveFuelOption in content/anwb.js.
    */
   function mapFuel(as24Fuel) {
     const raw = String(as24Fuel ?? '').trim();
@@ -83,9 +95,6 @@
     for (const [pattern, anwb] of FUEL_MAP) {
       if (pattern.test(raw) || pattern.test(norm)) return anwb;
     }
-
-    // Pure electric: ANWB has no matching option, and does not ask for one.
-    if (/^(elektro|elektrisch|electric|bev)$/i.test(norm)) return null;
 
     return null;
   }
