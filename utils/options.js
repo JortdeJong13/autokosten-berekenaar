@@ -46,40 +46,66 @@
    * These are concept vocabularies, deliberately not make- or model-specific.
    */
   const CONCEPTS = [
+    // --- Paint: answered by a structured field, not by equipment ---
+    // AS24 reports paintType outright, and ANWB prices each finish
+    // separately, so these map one-to-one on the word itself.
     {
       id: 'metallicPaint',
-      anwb: ['metallic'],
-      // paintType is authoritative, so no equipment words are needed.
+      anwb: ['metallic lak', 'metallic'],
       field: { name: 'paintType', matches: /^metallic$/i },
     },
     {
-      id: 'sunroof',
-      anwb: ['schuifdak', 'zonnedak', 'open dak', 'panoramadak', 'glazen dak'],
-      as24: ['open dak', 'panoramadak', 'schuifdak', 'zonnedak'],
+      id: 'micaPaint',
+      anwb: ['mica lak', 'mica'],
+      field: { name: 'paintType', matches: /^mica$/i },
     },
     {
+      id: 'pearlPaint',
+      anwb: ['pareleffectlak', 'parelmoer', 'pareleffect'],
+      field: { name: 'paintType', matches: /^(parel|pearl)/i },
+    },
+
+    // --- Equipment: matched on the shared Dutch/English vocabulary ---
+    // Both sites describe these the same way, so a concept mapping is enough
+    // and no per-make list is involved.
+    {
       id: 'leather',
-      anwb: ['lederen bekleding', 'leer'],
+      anwb: ['lederen bekleding', 'leren bekleding'],
       as24: ['lederen bekleding'],
     },
     {
-      id: 'towbar',
-      anwb: ['trekhaak'],
-      as24: ['trekhaak'],
-    },
-    {
-      id: 'navigation',
-      anwb: ['navigatie'],
-      as24: ['navigatiesysteem', 'navigatie'],
+      id: 'climateControl',
+      anwb: ['automatic climate control', 'klimaatregeling'],
+      as24: ['automatische klimaatregeling'],
     },
     {
       id: 'cruiseControl',
-      anwb: ['cruisecontrol'],
-      as24: ['cruisecontrol'],
+      anwb: ['cruise control', 'cruisecontrol'],
+      // Adaptive cruise is a superset: a car with it also has cruise control.
+      as24: ['cruisecontrol', 'adaptieve cruise control'],
+    },
+    {
+      id: 'rainSensor',
+      anwb: ['regensensor'],
+      as24: ['regensensor'],
+    },
+    {
+      id: 'heatedSeats',
+      // "stoel" + "verwarm" also covers ANWB's "STOELEN VERWARMED" spelling,
+      // while excluding "VERWARMDE VOORRUIT" (no seat).
+      anwbAll: [['stoel', 'verwarm'], ['stoelverwarming']],
+      as24: ['stoelverwarming'],
+    },
+    {
+      id: 'electricSeat',
+      // Excludes "ZIJRUITEN ELEKTRISCH VOOR" (no seat) and
+      // "HOOGTEVERSTELLING STOEL" (not electric).
+      anwbAll: [['stoel', 'elektrisch'], ['elektrische stoelverstelling']],
+      as24: ['elektrische stoelverstelling'],
     },
     {
       id: 'parkingSensors',
-      anwb: ['parkeersensoren', 'parkeerhulp'],
+      anwb: ['parkdistance', 'parkeersensoren', 'parkeerhulp', 'parkeerhulp'],
       as24: ['parkeerhulp'],
     },
     {
@@ -88,21 +114,45 @@
       as24: ['lichtmetalen velgen'],
     },
     {
-      id: 'seatHeating',
-      anwb: ['stoelverwarming'],
-      as24: ['stoelverwarming'],
+      id: 'navigation',
+      anwb: ['navigatie'],
+      as24: ['navigatiesysteem'],
     },
+
+    // --- Roof: matched, but the type is not always specified ---
+    // AS24 says only "Open dak". ANWB distinguishes a plain sliding roof from
+    // an electrically operated one, at different prices. A car listed with a
+    // roof almost certainly has the factory roof option, so this ticks, but it
+    // is the least certain mapping here.
     {
-      id: 'climateControl',
-      anwb: ['klimaatregeling', 'airconditioning'],
-      as24: ['automatische klimaatregeling', 'airconditioning'],
+      id: 'sunroof',
+      anwb: ['schuifdak', 'zonnedak', 'open dak', 'panoramadak', 'glazen dak'],
+      as24: ['open dak', 'panoramadak', 'schuifdak', 'zonnedak'],
     },
   ];
 
-  /** Does an ANWB option label belong to this concept? */
+
+  /**
+   * Does an ANWB option label belong to this concept?
+   *
+   * Two forms:
+   *   `anwb`    — any one of these phrases appears.
+   *   `anwbAll` — every token in one of these groups appears (order-free).
+   *
+   * The token form matters because ANWB's own labels are inconsistent: heated
+   * seats appear as "STOELEN VERWARMED" (sic) in their data, while the heated
+   * windscreen is "VERWARMDE VOORRUIT". Requiring both "stoel" and "verwarm"
+   * distinguishes them without hard-coding a misspelling.
+   */
   function anwbMatchesConcept(concept, anwbLabel) {
     const text = normalise(anwbLabel);
-    return concept.anwb.some((word) => text.includes(normalise(word)));
+    const lower = text.replace(/\s+/g, ' ');
+
+    if ((concept.anwb || []).some((phrase) => lower.includes(normalise(phrase)))) return true;
+
+    return (concept.anwbAll || []).some((tokens) =>
+      tokens.every((token) => lower.includes(normalise(token)))
+    );
   }
 
   /** Is there AS24 evidence for this concept? */
